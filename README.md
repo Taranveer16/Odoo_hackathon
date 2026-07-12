@@ -292,7 +292,7 @@ npm run dev
 
 # 🌐 Deployed Link
 
->
+>transit-6ydbic5jj-co-der25788.vercel.app
 
 ---
 
