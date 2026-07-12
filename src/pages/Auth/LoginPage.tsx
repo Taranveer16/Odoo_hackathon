@@ -1,0 +1,283 @@
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { motion } from 'framer-motion';
+import { Truck, Eye, EyeOff, AlertCircle, ChevronDown } from 'lucide-react';
+import { login } from '../../services/authService';
+import { useAuthStore } from '../../store/authStore';
+import { MOCK_USERS } from '../../mocks/mockData';
+import type { Role } from '../../types';
+import { USE_MOCK } from '../../mocks/mockStore';
+
+const schema = z.object({
+  email: z.string().email('Enter a valid email address'),
+  password: z.string().min(3, 'Password must be at least 3 characters'),
+  rememberMe: z.boolean().optional(),
+});
+
+type FormData = z.infer<typeof schema>;
+
+const roleDescriptions: Record<Role, string> = {
+  fleet_manager: 'Full fleet control & all modules',
+  dispatcher: 'Create & dispatch trips',
+  safety_officer: 'Driver safety & license monitoring',
+  financial_analyst: 'Costs, fuel & financial reports',
+};
+
+const roleLabels: Record<Role, string> = {
+  fleet_manager: 'Fleet Manager',
+  dispatcher: 'Dispatcher',
+  safety_officer: 'Safety Officer',
+  financial_analyst: 'Financial Analyst',
+};
+
+export default function LoginPage() {
+  const navigate = useNavigate();
+  const authLogin = useAuthStore((s) => s.login);
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedMockUser, setSelectedMockUser] = useState<string>(MOCK_USERS[0].email);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm<FormData>({ resolver: zodResolver(schema) });
+
+  const onSubmit = async (data: FormData) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await login(data.email, data.password);
+      authLogin(res.token, res.user);
+      navigate('/app/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRoleSwitch = (email: string) => {
+    setSelectedMockUser(email);
+    setValue('email', email);
+    setValue('password', 'demo123');
+  };
+
+  return (
+    <div className="min-h-screen bg-surface flex">
+      {/* ── Left: Brand Panel ─────────────────────────────────── */}
+      <motion.div
+        initial={{ x: -40, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ duration: 0.6 }}
+        className="hidden lg:flex w-1/2 flex-col justify-between p-12 relative overflow-hidden border-r border-border"
+      >
+        {/* Background glow */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-accent/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-accent/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+        <div className="hero-grid-bg absolute inset-0 opacity-30" />
+
+        <div className="relative">
+          <div className="flex items-center gap-2.5 mb-16">
+            <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center">
+              <Truck className="w-5 h-5 text-surface" />
+            </div>
+            <span className="text-xl font-bold">Transit<span className="text-accent">Ops</span></span>
+          </div>
+
+          <h2 className="text-4xl font-black leading-tight mb-4">
+            Smart operations
+            <br />
+            <span className="text-gradient-amber">for modern fleets</span>
+          </h2>
+          <p className="text-secondary text-sm leading-relaxed max-w-sm mb-12">
+            One platform to dispatch, track, maintain, and optimize your entire fleet. Eliminate the spreadsheet chaos.
+          </p>
+
+          {/* Role list */}
+          <div className="space-y-3">
+            <p className="text-2xs font-bold text-muted uppercase tracking-widest mb-4">Platform Roles</p>
+            {(Object.keys(roleLabels) as Role[]).map((role, i) => (
+              <motion.div
+                key={role}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 + i * 0.1 }}
+                className="flex items-start gap-3 p-3 rounded-lg bg-panel/60 border border-border/50"
+              >
+                <div className="w-7 h-7 rounded-lg bg-accent-subtle border border-accent/20 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="text-accent text-xs font-bold">{roleLabels[role][0]}</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-primary">{roleLabels[role]}</p>
+                  <p className="text-xs text-muted">{roleDescriptions[role]}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative text-xs text-muted">
+          © 2025 TransitOps · Built for fleet operators
+        </div>
+      </motion.div>
+
+      {/* ── Right: Login Form ──────────────────────────────────── */}
+      <motion.div
+        initial={{ x: 40, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ duration: 0.6 }}
+        className="flex-1 flex items-center justify-center p-6"
+      >
+        <div className="w-full max-w-md">
+          {/* Mobile logo */}
+          <div className="flex items-center gap-2 mb-8 lg:hidden">
+            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
+              <Truck className="w-4 h-4 text-surface" />
+            </div>
+            <span className="text-lg font-bold">Transit<span className="text-accent">Ops</span></span>
+          </div>
+
+          <h1 className="text-2xl font-black text-primary mb-1">Welcome back</h1>
+          <p className="text-secondary text-sm mb-8">Sign in to your fleet dashboard</p>
+
+          {/* ── Dev: Role Switcher ────────────────────────────── */}
+          {USE_MOCK && (
+            <div className="mb-6 p-4 rounded-xl border border-accent/30 bg-accent-subtle">
+              <p className="text-xs font-bold text-accent uppercase tracking-wider mb-3">
+                🚀 Demo Mode — Quick Role Switch
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {MOCK_USERS.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => handleRoleSwitch(u.email)}
+                    className={`text-left px-3 py-2 rounded-lg text-xs border transition-all ${
+                      selectedMockUser === u.email
+                        ? 'bg-accent/20 border-accent/50 text-accent font-semibold'
+                        : 'bg-surface border-border text-secondary hover:border-border-2'
+                    }`}
+                  >
+                    <span className="font-semibold block">{u.name}</span>
+                    <span className="opacity-70">{roleLabels[u.role]}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted mt-2">Any password works in demo mode (≥ 3 chars)</p>
+            </div>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-start gap-3 p-3 rounded-lg bg-danger-bg border border-danger-border text-danger text-sm mb-6"
+            >
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              {error}
+            </motion.div>
+          )}
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            {/* Email */}
+            <div>
+              <label htmlFor="email" className="label">Email Address</label>
+              <input
+                id="email"
+                type="email"
+                {...register('email')}
+                className={`input ${errors.email ? 'input-error' : ''}`}
+                placeholder="you@company.com"
+                autoComplete="email"
+              />
+              {errors.email && (
+                <p className="field-error">
+                  <AlertCircle className="w-3 h-3" />
+                  {errors.email.message}
+                </p>
+              )}
+            </div>
+
+            {/* Password */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="password" className="label mb-0">Password</label>
+                <a href="#" className="text-xs text-accent hover:text-accent-light transition-colors">
+                  Forgot password?
+                </a>
+              </div>
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  {...register('password')}
+                  className={`input pr-10 ${errors.password ? 'input-error' : ''}`}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-secondary transition-colors"
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {errors.password && (
+                <p className="field-error">
+                  <AlertCircle className="w-3 h-3" />
+                  {errors.password.message}
+                </p>
+              )}
+            </div>
+
+            {/* Remember me */}
+            <div className="flex items-center gap-2">
+              <input
+                id="rememberMe"
+                type="checkbox"
+                {...register('rememberMe')}
+                className="w-4 h-4 rounded border-border bg-surface-2 accent-accent cursor-pointer"
+              />
+              <label htmlFor="rememberMe" className="text-sm text-secondary cursor-pointer">
+                Remember me for 30 days
+              </label>
+            </div>
+
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="btn-primary w-full py-3 text-base flex items-center justify-center gap-2"
+              id="login-submit"
+            >
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-surface/30 border-t-surface rounded-full animate-spin" />
+                  Signing in…
+                </>
+              ) : (
+                'Sign In to Dashboard'
+              )}
+            </button>
+          </form>
+
+          <p className="text-center text-xs text-muted mt-8">
+            Don't have an account?{' '}
+            <Link to="/" className="text-accent hover:text-accent-light transition-colors">
+              Request access →
+            </Link>
+          </p>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
