@@ -1,34 +1,43 @@
-import { v4 as uuidv4 } from 'uuid';
-import { mockDelay, mockStore, USE_MOCK } from '../mocks/mockStore';
-import { MOCK_USERS } from '../mocks/mockData';
-import apiClient from '../lib/apiClient';
-import type { AuthResponse, User } from '../types';
+import { api } from './api';
+import type { Role } from '../types';
 
-// POST /auth/login
-export async function login(email: string, password: string): Promise<AuthResponse> {
-  if (USE_MOCK) {
-    await mockDelay(600);
-    const user = MOCK_USERS.find((u) => u.email === email);
-    if (!user || password.length < 3) {
-      throw new Error('Invalid email or password');
-    }
-    const token = `mock-jwt-${user.id}-${Date.now()}`;
-    return { token, user };
-  }
-  const res = await apiClient.post<AuthResponse>('/auth/login', { email, password });
-  return res.data;
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
 }
 
-// GET /auth/me
-export async function getMe(): Promise<User> {
-  if (USE_MOCK) {
-    await mockDelay(200);
-    const token = localStorage.getItem('transit_token');
-    const userId = token?.split('-')[2];
-    const user = MOCK_USERS.find((u) => u.id === userId);
-    if (!user) throw new Error('User not found');
-    return user;
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+}
+
+export async function login(email: string, password: string): Promise<AuthResponse> {
+  try {
+    const { data } = await api.post<AuthResponse>('/auth/login', { email, password });
+    return data;
+  } catch (err: any) {
+    throw new Error(err.response?.data?.detail || 'Login failed. Please try again.');
   }
-  const res = await apiClient.get<User>('/auth/me');
-  return res.data;
+}
+
+export async function signup(
+  name: string,
+  email: string,
+  password: string,
+  role: Role
+): Promise<AuthResponse> {
+  try {
+    const { data } = await api.post<AuthResponse>('/auth/signup', { name, email, password, role });
+    return data;
+  } catch (err: any) {
+    throw new Error(err.response?.data?.detail || 'Signup failed. Please try again.');
+  }
+}
+
+export async function fetchMe(): Promise<AuthUser> {
+  const { data } = await api.get<AuthUser>('/auth/me');
+  return data;
 }

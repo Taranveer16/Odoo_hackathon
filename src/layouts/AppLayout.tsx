@@ -19,18 +19,19 @@ import {
   Bell,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { USE_MOCK } from '../mocks/mockStore';
 import type { Role } from '../types';
 
-const navItems = [
-  { path: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/app/fleet', icon: Car, label: 'Fleet' },
-  { path: '/app/drivers', icon: Users, label: 'Drivers' },
-  { path: '/app/trips', icon: Navigation, label: 'Trips' },
-  { path: '/app/maintenance', icon: Wrench, label: 'Maintenance' },
-  { path: '/app/fuel', icon: Fuel, label: 'Fuel & Expenses' },
-  { path: '/app/analytics', icon: BarChart3, label: 'Analytics' },
-  { path: '/app/settings', icon: Settings, label: 'Settings' },
+const allRoles: Role[] = ['fleet_manager', 'dispatcher', 'safety_officer', 'financial_analyst'];
+
+const navItems: { path: string; icon: typeof LayoutDashboard; label: string; roles: Role[] }[] = [
+  { path: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard', roles: allRoles },
+  { path: '/app/fleet', icon: Car, label: 'Fleet', roles: ['fleet_manager'] },
+  { path: '/app/drivers', icon: Users, label: 'Drivers', roles: ['fleet_manager', 'safety_officer'] },
+  { path: '/app/trips', icon: Navigation, label: 'Trips', roles: ['fleet_manager', 'dispatcher'] },
+  { path: '/app/maintenance', icon: Wrench, label: 'Maintenance', roles: ['fleet_manager'] },
+  { path: '/app/fuel', icon: Fuel, label: 'Fuel & Expenses', roles: ['fleet_manager', 'financial_analyst'] },
+  { path: '/app/analytics', icon: BarChart3, label: 'Analytics', roles: ['fleet_manager', 'financial_analyst'] },
+  { path: '/app/settings', icon: Settings, label: 'Settings', roles: allRoles },
 ];
 
 const pageCtaMap: Record<string, string> = {
@@ -56,7 +57,7 @@ const roleColors: Record<Role, string> = {
 };
 
 export default function AppLayout() {
-  const { user, logout, switchRole } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -82,7 +83,7 @@ export default function AppLayout() {
 
       {/* Nav items */}
       <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ path, icon: Icon, label }) => (
+        {navItems.filter(({ roles }) => !user || roles.includes(user.role)).map(({ path, icon: Icon, label }) => (
           <NavLink
             key={path}
             to={path}
@@ -102,28 +103,6 @@ export default function AppLayout() {
           </NavLink>
         ))}
       </nav>
-
-      {/* Dev role switcher */}
-      {USE_MOCK && (!collapsed || mobile) && user && (
-        <div className="px-3 py-3 border-t border-border">
-          <p className="text-2xs font-bold text-muted uppercase tracking-widest mb-2 px-1">Demo: Switch Role</p>
-          <div className="space-y-1">
-            {(Object.keys(roleLabels) as Role[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => switchRole(r)}
-                className={`w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors ${
-                  user.role === r
-                    ? `${roleColors[r]} bg-panel-2 font-semibold`
-                    : 'text-muted hover:text-secondary hover:bg-panel'
-                }`}
-              >
-                {roleLabels[r]}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* User section */}
       {user && (

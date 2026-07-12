@@ -8,6 +8,7 @@ import { Truck, Eye, EyeOff, AlertCircle, ChevronDown } from 'lucide-react';
 import { signup } from '../../services/authService';
 import { useAuthStore } from '../../store/authStore';
 import type { Role } from '../../types';
+import { getRoleDashboardPath } from '../../lib/roleDashboard';
 
 const schema = z
     .object({
@@ -17,10 +18,12 @@ const schema = z
             .string()
             .min(8, 'Password must be at least 8 characters')
             .regex(/[A-Z]/, 'Include at least one uppercase letter')
-            .regex(/[0-9]/, 'Include at least one number'),
+            .regex(/[a-z]/, 'Include at least one lowercase letter')
+            .regex(/[0-9]/, 'Include at least one number')
+            .regex(/[^A-Za-z0-9]/, 'Include at least one special character'),
         confirmPassword: z.string(),
         role: z.enum(['fleet_manager', 'dispatcher', 'safety_officer', 'financial_analyst'], {
-            errorMap: () => ({ message: 'Please select a role' }),
+            message: 'Please select a role',
         }),
     })
     .refine((data) => data.password === data.confirmPassword, {
@@ -44,13 +47,6 @@ const roleDescriptions: Record<Role, string> = {
     financial_analyst: 'Costs, fuel & financial reports',
 };
 
-const roleDashboards: Record<Role, string> = {
-    fleet_manager: '/app/dashboard',
-    dispatcher: '/app/dispatch',
-    safety_officer: '/app/safety',
-    financial_analyst: '/app/finance',
-};
-
 export default function SignupPage() {
     const navigate = useNavigate();
     const authLogin = useAuthStore((s) => s.login);
@@ -71,7 +67,7 @@ export default function SignupPage() {
         try {
             const res = await signup(data.name, data.email, data.password, data.role as Role);
             authLogin(res.access_token, res.user);
-            navigate(roleDashboards[res.user.role] || '/app/dashboard');
+            navigate(getRoleDashboardPath(res.user.role));
         } catch (err: any) {
             setError(err.message || 'Signup failed. Please try again.');
         } finally {

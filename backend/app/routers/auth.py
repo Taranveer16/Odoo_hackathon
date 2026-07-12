@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .. import models, schemas, auth
 from ..database import get_db
@@ -7,7 +9,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/signup", response_model=schemas.Token, status_code=status.HTTP_201_CREATED)
 def signup(payload: schemas.UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(models.User).filter(models.User.email == payload.email).first()
+    existing = db.query(models.User).filter(func.lower(models.User.email) == payload.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -18,7 +20,11 @@ def signup(payload: schemas.UserCreate, db: Session = Depends(get_db)):
         role=payload.role,
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Email already registered")
     db.refresh(user)
 
     token = auth.create_access_token({"sub": str(user.id), "role": user.role.value})
