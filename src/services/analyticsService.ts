@@ -22,7 +22,7 @@ export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
 
     const activeTrips = trips.filter((t) => t.status === 'dispatched').length;
     const pendingTrips = trips.filter((t) => t.status === 'draft').length;
-    const completedTrips = trips.filter((t) => t.status === 'completed').length;
+    const completedTrips = trips.filter((t) => t.status === 'delivered' || t.status === 'trip_closed').length;
 
     const driversOnDuty = drivers.filter((d) => d.status === 'on_trip').length;
 
@@ -126,7 +126,7 @@ export async function getVehicleCostData(): Promise<VehicleCostData[]> {
         const totalCost = fuelCost + maintenanceCost;
         // Simplified ROI: assume revenue = planned distance * $2/km
         const completedTripsForVehicle = mockStore.getTrips().filter(
-          (t) => t.vehicleId === vehicle.id && t.status === 'completed'
+          (t) => t.vehicleId === vehicle.id && (t.status === 'delivered' || t.status === 'trip_closed')
         );
         const revenue = completedTripsForVehicle.reduce(
           (sum, t) => sum + (t.actualDistance || t.plannedDistance) * 2,

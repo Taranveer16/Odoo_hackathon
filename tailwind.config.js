@@ -5,12 +5,12 @@ export default {
     extend: {
       colors: {
         // ── Backgrounds ──────────────────────────────
-        surface: '#0E0F11',
-        'surface-2': '#141517',
-        panel: '#1A1B1E',
-        'panel-2': '#202124',
-        border: '#2A2B2E',
-        'border-2': '#3A3B3E',
+        surface: 'var(--bg-surface)',
+        'surface-2': 'var(--bg-surface-2)',
+        panel: 'var(--bg-panel)',
+        'panel-2': 'var(--bg-panel-2)',
+        border: 'var(--border)',
+        'border-2': 'var(--border-2)',
 
         // ── Accent (Amber) ───────────────────────────
         accent: {
@@ -18,50 +18,45 @@ export default {
           light: '#FCD34D',
           dark: '#D97706',
           muted: '#92400E',
-          subtle: '#1C1505',
+          subtle: 'var(--accent-subtle)',
         },
 
         // ── Text ─────────────────────────────────────
-        primary: '#F1F2F4',
-        secondary: '#9CA3AF',
-        muted: '#6B7280',
+        primary: 'var(--text-primary)',
+        secondary: 'var(--text-secondary)',
+        muted: 'var(--text-muted)',
         disabled: '#4B5563',
 
         // ── Status Colors ─────────────────────────────
-        // Available / Completed / Active → green
         success: {
           DEFAULT: '#22C55E',
-          bg: '#052E16',
+          bg: 'var(--success-bg)',
           border: '#166534',
-          text: '#4ADE80',
+          text: 'var(--success-text)',
         },
-        // On Trip / Dispatched / In Progress → blue
         info: {
           DEFAULT: '#3B82F6',
-          bg: '#0C1A3A',
+          bg: 'var(--info-bg)',
           border: '#1E40AF',
-          text: '#60A5FA',
+          text: 'var(--info-text)',
         },
-        // In Shop / Pending → orange
         warning: {
           DEFAULT: '#F97316',
-          bg: '#1C0D00',
+          bg: 'var(--warning-bg)',
           border: '#9A3412',
-          text: '#FB923C',
+          text: 'var(--warning-text)',
         },
-        // Retired / Cancelled / Suspended → red
         danger: {
           DEFAULT: '#EF4444',
-          bg: '#1C0505',
+          bg: 'var(--danger-bg)',
           border: '#991B1B',
-          text: '#F87171',
+          text: 'var(--danger-text)',
         },
-        // Off Duty → gray
         neutral: {
           DEFAULT: '#6B7280',
-          bg: '#111827',
+          bg: 'var(--neutral-bg)',
           border: '#374151',
-          text: '#9CA3AF',
+          text: 'var(--neutral-text)',
         },
       },
 

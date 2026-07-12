@@ -15,14 +15,23 @@ export async function getTrips(): Promise<Trip[]> {
 
 // POST /trips
 export async function createTrip(
-  data: Omit<Trip, 'id' | 'createdAt' | 'updatedAt' | 'status'>
+  data: Partial<Trip>
 ): Promise<Trip> {
   if (USE_MOCK) {
     await mockDelay(400);
     const trip: Trip = {
+      checkpoints: [],
+      priority: 'normal',
+      cargoWeight: 0,
+      plannedDistance: 0,
       ...data,
-      id: uuidv4(),
+      id: `TRP-${String(Date.now()).slice(-4)}`,
       status: 'draft',
+      progressPercent: 0,
+      source: data.source ?? '',
+      destination: data.destination ?? '',
+      vehicleId: data.vehicleId ?? '',
+      driverId: data.driverId ?? '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -42,6 +51,7 @@ export async function dispatchTrip(id: string): Promise<Trip> {
     const updated: Trip = {
       ...trip,
       status: 'dispatched',
+      progressPercent: 5,
       dispatchedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -59,7 +69,7 @@ export async function dispatchTrip(id: string): Promise<Trip> {
   return res.data;
 }
 
-// PATCH /trips/:id/complete
+// PATCH /trips/:id/complete (mark as delivered)
 export async function completeTrip(
   id: string,
   data: { finalOdometer: number; fuelConsumed: number; actualDistance?: number }
@@ -71,7 +81,8 @@ export async function completeTrip(
     const updated: Trip = {
       ...trip,
       ...data,
-      status: 'completed',
+      status: 'delivered',
+      progressPercent: 100,
       completedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -83,7 +94,7 @@ export async function completeTrip(
       mockStore.updateVehicle({
         ...vehicle,
         status: 'available',
-        odometer: data.finalOdometer,
+        odometer: data.finalOdometer || vehicle.odometer,
         updatedAt: new Date().toISOString(),
       });
     }
@@ -111,8 +122,9 @@ export async function cancelTrip(id: string, reason?: string): Promise<Trip> {
     };
     mockStore.updateTrip(updated);
 
-    // Side-effect: only restore if was dispatched
-    if (trip.status === 'dispatched') {
+    // Side-effect: restore if was dispatched / in transit
+    const activeStatuses = ['dispatched', 'departed', 'en_route', 'in_transit', 'at_checkpoint'];
+    if (activeStatuses.includes(trip.status)) {
       const vehicle = mockStore.getVehicle(trip.vehicleId);
       if (vehicle) mockStore.updateVehicle({ ...vehicle, status: 'available', updatedAt: new Date().toISOString() });
       const driver = mockStore.getDriver(trip.driverId);
@@ -122,5 +134,61 @@ export async function cancelTrip(id: string, reason?: string): Promise<Trip> {
     return updated;
   }
   const res = await apiClient.patch<Trip>(`/trips/${id}/cancel`, { reason });
+  return res.data;
+}
+
+// PATCH /trips/:id/checkpoint/:cpId — mark next checkpoint as arrived/departed
+export async function markCheckpoint(tripId: string, checkpointId: string): Promise<Trip> {
+  if (USE_MOCK) {
+    await mockDelay(300);
+    const trip = mockStore.getTrip(tripId);
+    if (!trip) throw new Error(`Trip ${tripId} not found`);
+
+    const now = new Date().toISOString();
+    const cpIndex = trip.checkpoints.findIndex(c => c.id === checkpointId);
+    if (cpIndex === -1) throw new Error(`Checkpoint ${checkpointId} not found`);
+
+    const cp = trip.checkpoints[cpIndex];
+    // Advance checkpoint status: pending → arrived → departed/completed
+    let newCpStatus: import('../types').CheckpointStatus = cp.status;
+    let actualArrival = cp.actualArrival;
+    let actualDeparture = cp.actualDeparture;
+
+    if (cp.status === 'pending' || cp.status === 'en_route') {
+      newCpStatus = 'arrived';
+      actualArrival = now;
+    } else if (cp.status === 'arrived' || cp.status === 'loading' || cp.status === 'unloading' || cp.status === 'waiting') {
+      newCpStatus = 'completed';
+      actualDeparture = now;
+    }
+
+    const updatedCheckpoints = trip.checkpoints.map((c, i) =>
+      i === cpIndex ? { ...c, status: newCpStatus, actualArrival, actualDeparture } : c
+    );
+
+    // Compute new overall progress
+    const completedCount = updatedCheckpoints.filter(c => c.status === 'completed' || c.status === 'departed').length;
+    const totalStops = updatedCheckpoints.length + 2; // +2 for origin and destination
+    const progressPercent = Math.round(((completedCount + 1) / totalStops) * 100);
+
+    // If all checkpoints completed, advance trip to out_for_delivery
+    const allDone = updatedCheckpoints.every(c => c.status === 'completed' || c.status === 'departed');
+    const newStatus: import('../types').TripLifecycleStatus = allDone
+      ? 'out_for_delivery'
+      : trip.status === 'dispatched' || trip.status === 'departed'
+      ? 'in_transit'
+      : trip.status;
+
+    const updated: Trip = {
+      ...trip,
+      checkpoints: updatedCheckpoints,
+      status: newStatus,
+      progressPercent: Math.min(progressPercent, 95),
+      updatedAt: now,
+    };
+    mockStore.updateTrip(updated);
+    return updated;
+  }
+  const res = await apiClient.patch<Trip>(`/trips/${tripId}/checkpoint/${checkpointId}`);
   return res.data;
 }

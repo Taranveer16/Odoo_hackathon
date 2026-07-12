@@ -1,8 +1,6 @@
 // ============================================================
 // TransitOps — Data Type Definitions
-// These interfaces map 1:1 to PostgreSQL table columns.
-// All entities include id (UUID), createdAt, updatedAt.
-// Foreign keys use IDs (not nested objects) for API compatibility.
+// Extended with full checkpoint/route lifecycle support
 // ============================================================
 
 export type Role =
@@ -39,7 +37,7 @@ export type VehicleStatus =
 
 export interface Vehicle {
   id: string;
-  registrationNumber: string; // unique
+  registrationNumber: string;
   name: string;
   model: string;
   type: VehicleType;
@@ -68,7 +66,7 @@ export interface Driver {
   name: string;
   licenseNumber: string;
   licenseCategory: LicenseCategory;
-  licenseExpiry: string; // ISO date string
+  licenseExpiry: string;
   contactNumber: string;
   email?: string;
   safetyScore: number; // 0–100
@@ -79,26 +77,77 @@ export interface Driver {
   updatedAt: string;
 }
 
-// ─── Trip ────────────────────────────────────────────────────
-export type TripStatus =
+// ─── Trip & Checkpoints ──────────────────────────────────────
+export type CheckpointStatus =
+  | 'pending'
+  | 'en_route'
+  | 'arrived'
+  | 'loading'
+  | 'unloading'
+  | 'waiting'
+  | 'delayed'
+  | 'departed'
+  | 'completed';
+
+export interface Checkpoint {
+  id: string;
+  label: string;          // e.g. "Checkpoint 1 (Nashik)"
+  location: string;
+  expectedArrival?: string;
+  actualArrival?: string;
+  expectedDeparture?: string;
+  actualDeparture?: string;
+  status: CheckpointStatus;
+  notes?: string;
+  delayMinutes?: number;
+}
+
+export type TripLifecycleStatus =
   | 'draft'
+  | 'assigned'
+  | 'ready_for_dispatch'
   | 'dispatched'
-  | 'completed'
+  | 'departed'
+  | 'en_route'
+  | 'at_checkpoint'
+  | 'loading'
+  | 'unloading'
+  | 'in_transit'
+  | 'waiting'
+  | 'delayed'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'trip_closed'
   | 'cancelled';
+
+// Keep backward compat alias
+export type TripStatus = TripLifecycleStatus;
+
+export type TripPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface Trip {
   id: string;
+  tripName?: string;
   vehicleId: string;
   driverId: string;
   source: string;
   destination: string;
-  cargoWeight: number; // kg
-  plannedDistance: number; // km
-  actualDistance?: number; // km
-  fuelConsumed?: number; // liters
-  finalOdometer?: number; // km
-  status: TripStatus;
+  checkpoints: Checkpoint[];       // Multi-stop route
+  cargoType?: string;
+  cargoWeight: number;
+  clientName?: string;
+  plannedDistance: number;
+  actualDistance?: number;
+  fuelConsumed?: number;
+  finalOdometer?: number;
+  status: TripLifecycleStatus;
+  priority: TripPriority;
+  progressPercent?: number;        // 0–100
+  currentLocation?: string;
+  currentSpeed?: number;           // km/h
+  eta?: string;                    // ISO datetime
   dispatchedAt?: string;
+  departedAt?: string;
   completedAt?: string;
   cancelledAt?: string;
   notes?: string;
@@ -126,7 +175,7 @@ export interface MaintenanceRecord {
   serviceType: ServiceType;
   description?: string;
   cost: number;
-  date: string; // ISO date
+  date: string;
   status: MaintenanceStatus;
   technician?: string;
   completedAt?: string;
@@ -174,11 +223,11 @@ export interface AnalyticsSummary {
   pendingTrips: number;
   completedTrips: number;
   driversOnDuty: number;
-  fleetUtilization: number; // percentage
+  fleetUtilization: number;
   totalFuelCost: number;
   totalMaintenanceCost: number;
   totalOperationalCost: number;
-  avgFuelEfficiency: number; // km/liter
+  avgFuelEfficiency: number;
 }
 
 export interface MonthlyFuelData {
@@ -195,7 +244,7 @@ export interface VehicleCostData {
   maintenanceCost: number;
   totalCost: number;
   acquisitionCost: number;
-  roi: number; // percentage
+  roi: number;
 }
 
 // ─── API Responses ───────────────────────────────────────────
