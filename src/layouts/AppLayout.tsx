@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Truck,
   LayoutDashboard,
   Car,
   Users,
@@ -17,35 +16,82 @@ import {
   ChevronLeft,
   ChevronRight,
   Bell,
+  ArrowLeft,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { USE_MOCK } from '../mocks/mockStore';
 import type { Role } from '../types';
 
-const navItems = [
-  { path: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/app/fleet', icon: Car, label: 'Fleet' },
-  { path: '/app/drivers', icon: Users, label: 'Drivers' },
-  { path: '/app/trips', icon: Navigation, label: 'Trips' },
-  { path: '/app/maintenance', icon: Wrench, label: 'Maintenance' },
-  { path: '/app/fuel', icon: Fuel, label: 'Fuel & Expenses' },
-  { path: '/app/analytics', icon: BarChart3, label: 'Analytics' },
-  { path: '/app/settings', icon: Settings, label: 'Settings' },
-];
+interface NavItem {
+  path: string;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  label: string;
+  roles: Role[];
+}
 
-const pageCtaMap: Record<string, string> = {
-  '/app/fleet': '+ Add Vehicle',
-  '/app/drivers': '+ Add Driver',
-  '/app/trips': '+ Log Trip',
-  '/app/maintenance': '+ Log Service',
-  '/app/fuel': '+ Log Fuel',
-};
+const navItems: NavItem[] = [
+  {
+    path: '/app/dashboard',
+    icon: LayoutDashboard,
+    label: 'Dashboard & KPIs',
+    roles: ['fleet_manager', 'dispatcher', 'safety_officer', 'financial_analyst'],
+  },
+  {
+    path: '/app/fleet',
+    icon: Car,
+    label: 'Vehicle Registry',
+    roles: ['fleet_manager', 'dispatcher', 'safety_officer', 'financial_analyst'],
+  },
+  {
+    path: '/app/drivers',
+    icon: Users,
+    label: 'Driver & Safety Profiles',
+    roles: ['fleet_manager', 'dispatcher', 'safety_officer'],
+  },
+  {
+    path: '/app/trips',
+    icon: Navigation,
+    label: 'Trip Dispatcher',
+    roles: ['fleet_manager', 'dispatcher', 'safety_officer'],
+  },
+  {
+    path: '/app/maintenance',
+    icon: Wrench,
+    label: 'Maintenance Workflow',
+    roles: ['fleet_manager'],
+  },
+  {
+    path: '/app/fuel',
+    icon: Fuel,
+    label: 'Fuel & Expense Tracking',
+    roles: ['fleet_manager', 'financial_analyst'],
+  },
+  {
+    path: '/app/analytics',
+    icon: BarChart3,
+    label: 'Reports & Analytics',
+    roles: ['fleet_manager', 'financial_analyst'],
+  },
+  {
+    path: '/app/settings',
+    icon: Settings,
+    label: 'RBAC & Settings',
+    roles: ['fleet_manager'],
+  },
+];
 
 const roleLabels: Record<Role, string> = {
   fleet_manager: 'Fleet Manager',
   dispatcher: 'Dispatcher',
   safety_officer: 'Safety Officer',
   financial_analyst: 'Financial Analyst',
+};
+
+const roleInitials: Record<Role, string> = {
+  fleet_manager: 'FM',
+  dispatcher: 'DS',
+  safety_officer: 'SO',
+  financial_analyst: 'FA',
 };
 
 const roleColors: Record<Role, string> = {
@@ -68,83 +114,131 @@ export default function AppLayout() {
 
   const SidebarContent = ({ mobile = false }) => (
     <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className={`flex items-center gap-2.5 px-4 py-5 border-b border-border ${collapsed && !mobile ? 'justify-center' : ''}`}>
-        <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center shrink-0">
-          <Truck style={{ width: 16, height: 16 }} className="text-surface" />
-        </div>
+      {/* Header / Brand */}
+      <div className={`flex items-center gap-3 px-4 py-5 border-b border-border ${collapsed && !mobile ? 'justify-center' : ''}`}>
+        <Link
+          to="/"
+          className="w-9 h-9 rounded-xl bg-accent text-surface flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shrink-0 shadow-lg shadow-accent/20"
+          title="Back to Landing Page"
+        >
+          <ArrowLeft className="w-5 h-5 text-surface stroke-[2.5]" />
+        </Link>
         {(!collapsed || mobile) && (
-          <span className="text-base font-bold text-primary whitespace-nowrap">
+          <span className="text-lg font-black text-primary tracking-tight">
             Transit<span className="text-accent">Ops</span>
           </span>
         )}
       </div>
 
+      {/* Dynamic Profile Widget */}
+      {user && (
+        <div className={`px-4 py-4 border-b border-border ${collapsed && !mobile ? 'flex justify-center' : ''}`}>
+          {(!collapsed || mobile) ? (
+            <div className="flex items-center gap-3 p-3.5 rounded-xl bg-surface border border-border/80 shadow-inner">
+              <div className="w-12 h-12 rounded-xl bg-accent text-surface flex items-center justify-center shrink-0 font-black text-base select-none shadow-md shadow-accent/15">
+                {roleInitials[user.role] || 'US'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-extrabold text-primary truncate leading-tight select-none">
+                  {roleLabels[user.role]}
+                </p>
+                <p className="text-2xs text-muted truncate mt-1 font-medium select-none">
+                  {user.email}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="w-10 h-10 rounded-xl bg-accent text-surface flex items-center justify-center font-black text-sm select-none hover:scale-105 transition-transform cursor-pointer shadow-md shadow-accent/15"
+              title={`${roleLabels[user.role]} (${user.email})`}
+            >
+              {roleInitials[user.role] || 'US'}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Nav items */}
-      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ path, icon: Icon, label }) => (
-          <NavLink
-            key={path}
-            to={path}
-            onClick={() => mobile && setMobileOpen(false)}
-            className={({ isActive }) =>
-              `sidebar-item ${isActive ? 'sidebar-item-active' : ''} ${collapsed && !mobile ? 'justify-center px-2' : ''}`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-accent' : ''}`} style={{ width: 18, height: 18 }} />
-                {(!collapsed || mobile) && (
-                  <span className="truncate">{label}</span>
-                )}
-              </>
-            )}
-          </NavLink>
-        ))}
+      <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto">
+        {navItems
+          .filter((item) => !user || item.roles.includes(user.role))
+          .map(({ path, icon: Icon, label }) => (
+            <NavLink
+              key={path}
+              to={path}
+              onClick={() => mobile && setMobileOpen(false)}
+              className={({ isActive }) =>
+                `sidebar-item flex items-center gap-3 py-3 px-3.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
+                  isActive
+                    ? 'bg-accent/15 text-accent border border-accent/20 font-bold shadow-sm shadow-accent/5'
+                    : 'text-secondary hover:text-primary hover:bg-panel-2 border border-transparent'
+                } ${collapsed && !mobile ? 'justify-center px-2' : ''}`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-accent' : 'text-secondary'}`} />
+                  {(!collapsed || mobile) && (
+                    <span className="truncate">{label}</span>
+                  )}
+                </>
+              )}
+            </NavLink>
+          ))}
       </nav>
 
       {/* Dev role switcher */}
       {USE_MOCK && (!collapsed || mobile) && user && (
-        <div className="px-3 py-3 border-t border-border">
-          <p className="text-2xs font-bold text-muted uppercase tracking-widest mb-2 px-1">Demo: Switch Role</p>
-          <div className="space-y-1">
+        <div className="px-4 py-3.5 border-t border-border bg-panel-2/40">
+          <p className="text-[10px] font-black text-muted uppercase tracking-wider mb-2 px-1">
+            Demo: Switch Role
+          </p>
+          <div className="grid grid-cols-2 gap-1.5">
             {(Object.keys(roleLabels) as Role[]).map((r) => (
               <button
                 key={r}
                 onClick={() => switchRole(r)}
-                className={`w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors ${
+                className={`text-[10px] px-2 py-1.5 rounded-lg text-left border transition-all duration-200 truncate ${
                   user.role === r
-                    ? `${roleColors[r]} bg-panel-2 font-semibold`
-                    : 'text-muted hover:text-secondary hover:bg-panel'
+                    ? `bg-accent/15 border-accent/30 text-accent font-bold`
+                    : 'bg-surface border-border text-muted hover:border-border-2 hover:text-secondary'
                 }`}
               >
-                {roleLabels[r]}
+                {roleInitials[r]}
               </button>
             ))}
           </div>
         </div>
       )}
 
-      {/* User section */}
+      {/* User section / Logout */}
       {user && (
-        <div className={`px-3 py-3 border-t border-border ${collapsed && !mobile ? 'flex justify-center' : ''}`}>
+        <div className={`px-4 py-3 border-t border-border ${collapsed && !mobile ? 'flex justify-center' : ''}`}>
           {(!collapsed || mobile) ? (
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-accent-subtle border border-accent/30 flex items-center justify-center shrink-0">
-                <span className="text-accent text-xs font-bold">{user.name[0]}</span>
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-panel-2 border border-border flex items-center justify-center text-primary text-xs font-bold select-none">
+                  {user.name[0]}
+                </div>
+                <span className="text-xs font-bold text-secondary truncate max-w-[100px] select-none">
+                  {user.name}
+                </span>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-primary truncate">{user.name}</p>
-                <p className={`text-2xs font-semibold ${roleColors[user.role]}`}>
-                  {roleLabels[user.role]}
-                </p>
-              </div>
-              <button onClick={handleLogout} className="text-muted hover:text-danger transition-colors" title="Sign out">
+              <button
+                onClick={handleLogout}
+                className="text-muted hover:text-danger p-1.5 rounded-lg hover:bg-danger/10 transition-colors flex items-center gap-1.5 text-xs font-bold"
+                title="Sign out"
+              >
                 <LogOut className="w-4 h-4" />
+                <span>Sign out</span>
               </button>
             </div>
           ) : (
-            <button onClick={handleLogout} className="text-muted hover:text-danger transition-colors" title="Sign out">
+            <button
+              onClick={handleLogout}
+              className="text-muted hover:text-danger p-2.5 rounded-xl hover:bg-danger/10 transition-colors"
+              title="Sign out"
+            >
               <LogOut className="w-4 h-4" />
             </button>
           )}
@@ -157,7 +251,7 @@ export default function AppLayout() {
     <div className="flex h-screen bg-surface overflow-hidden">
       {/* ── Desktop Sidebar ────────────────────────────────── */}
       <motion.aside
-        animate={{ width: collapsed ? 64 : 240 }}
+        animate={{ width: collapsed ? 68 : 260 }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
         className="hidden lg:flex flex-col bg-panel border-r border-border relative shrink-0"
       >
@@ -165,7 +259,7 @@ export default function AppLayout() {
         {/* Collapse toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute -right-3 top-16 w-6 h-6 rounded-full bg-panel border border-border flex items-center justify-center text-muted hover:text-primary hover:border-border-2 transition-colors z-10"
+          className="absolute -right-3 top-16 w-6 h-6 rounded-full bg-panel border border-border flex items-center justify-center text-muted hover:text-primary hover:border-border-2 transition-colors z-10 shadow-sm"
           aria-label="Toggle sidebar"
         >
           {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
@@ -227,15 +321,15 @@ export default function AppLayout() {
             </button>
             {/* User avatar */}
             {user && (
-              <div className="w-8 h-8 rounded-full bg-accent-subtle border border-accent/30 flex items-center justify-center">
-                <span className="text-accent text-xs font-bold">{user.name[0]}</span>
+              <div className="w-8 h-8 rounded-full bg-accent-subtle border border-accent/30 flex items-center justify-center font-bold text-xs text-accent select-none">
+                {user.name[0]}
               </div>
             )}
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-surface/30">
           <Outlet />
         </main>
       </div>

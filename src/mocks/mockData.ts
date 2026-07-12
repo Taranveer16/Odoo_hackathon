@@ -19,8 +19,8 @@ const daysFromNow = (n: number) =>
 export const MOCK_USERS: User[] = [
   {
     id: 'u1',
-    email: 'manager@transitops.io',
-    name: 'Alex Morgan',
+    email: 'raven.k@transitops.io',
+    name: 'Raven K.',
     role: 'fleet_manager',
     branch: 'HQ',
     createdAt: now,
@@ -28,8 +28,8 @@ export const MOCK_USERS: User[] = [
   },
   {
     id: 'u2',
-    email: 'dispatch@transitops.io',
-    name: 'Jordan Lee',
+    email: 'asha.f@transitops.io',
+    name: 'Asha F.',
     role: 'dispatcher',
     branch: 'HQ',
     createdAt: now,
@@ -37,8 +37,8 @@ export const MOCK_USERS: User[] = [
   },
   {
     id: 'u3',
-    email: 'safety@transitops.io',
-    name: 'Sam Rivera',
+    email: 'mateo.r@transitops.io',
+    name: 'Mateo R.',
     role: 'safety_officer',
     branch: 'HQ',
     createdAt: now,
@@ -46,8 +46,8 @@ export const MOCK_USERS: User[] = [
   },
   {
     id: 'u4',
-    email: 'finance@transitops.io',
-    name: 'Taylor Kim',
+    email: 'nisha.s@transitops.io',
+    name: 'Nisha S.',
     role: 'financial_analyst',
     branch: 'HQ',
     createdAt: now,
