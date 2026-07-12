@@ -48,6 +48,13 @@ export async function dispatchTrip(id: string): Promise<Trip> {
     await mockDelay(500);
     const trip = mockStore.getTrip(id);
     if (!trip) throw new Error(`Trip ${id} not found`);
+
+    // Validation: All checkpoints must have an assigned CCO
+    const unassignedCp = trip.checkpoints.find(cp => !cp.assignedCcoId);
+    if (unassignedCp) {
+      throw new Error(`Cannot dispatch: Checkpoint "${unassignedCp.label}" has no assigned Cargo Control Officer.`);
+    }
+
     const updated: Trip = {
       ...trip,
       status: 'dispatched',

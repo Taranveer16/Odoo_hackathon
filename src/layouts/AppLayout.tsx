@@ -50,19 +50,19 @@ const navItems: NavItem[] = [
     path: '/app/dashboard',
     icon: LayoutDashboard,
     label: 'Dashboard',
-    roles: ['fleet_manager', 'dispatcher', 'safety_officer', 'financial_analyst'],
+    roles: ['fleet_manager', 'dispatcher', 'financial_analyst'],
   },
   {
     path: '/app/fleet',
     icon: Car,
     label: 'Fleet Management',
-    roles: ['fleet_manager', 'dispatcher', 'safety_officer', 'financial_analyst'],
+    roles: ['fleet_manager', 'dispatcher', 'financial_analyst'],
   },
   {
     path: '/app/drivers',
     icon: Users,
     label: 'Drivers',
-    roles: ['fleet_manager', 'dispatcher', 'safety_officer'],
+    roles: ['fleet_manager', 'dispatcher'],
   },
   {
     path: '/app/maintenance',
@@ -95,6 +95,7 @@ const roleLabels: Record<Role, string> = {
   dispatcher: 'Dispatcher',
   safety_officer: 'Safety Officer',
   financial_analyst: 'Financial Analyst',
+  cargo_control_officer: 'Cargo Control Officer',
 };
 
 const roleInitials: Record<Role, string> = {
@@ -102,6 +103,7 @@ const roleInitials: Record<Role, string> = {
   dispatcher: 'DS',
   safety_officer: 'SO',
   financial_analyst: 'FA',
+  cargo_control_officer: 'CCO',
 };
 
 const roleColors: Record<Role, string> = {
@@ -109,6 +111,7 @@ const roleColors: Record<Role, string> = {
   dispatcher: 'text-info',
   safety_officer: 'text-success',
   financial_analyst: 'text-warning',
+  cargo_control_officer: 'text-purple-400',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -130,7 +133,7 @@ function humanStatus(s: string) {
 }
 
 export default function AppLayout() {
-  const { user, logout, switchRole } = useAuthStore();
+  const { user, logout, switchRole, setUser } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -346,7 +349,14 @@ export default function AppLayout() {
             {(Object.keys(roleLabels) as Role[]).map((r) => (
               <button
                 key={r}
-                onClick={() => switchRole(r)}
+                onClick={() => {
+                  switchRole(r);
+                  if (r === 'cargo_control_officer') {
+                    const updatedUser = { ...user!, role: r, assignedWarehouseId: user?.assignedWarehouseId || 'wh-001' };
+                    setUser(updatedUser);
+                    navigate('/cco/dashboard');
+                  }
+                }}
                 className={`text-[9px] font-black px-1.5 py-1 rounded border transition-all duration-200 truncate text-center ${
                   user.role === r
                     ? `bg-accent/15 border-accent/30 text-accent`

@@ -2,7 +2,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './pages/Landing/LandingPage';
 import LoginPage from './pages/Auth/LoginPage';
 import AppLayout from './layouts/AppLayout';
+import CCOLayout from './layouts/CCOLayout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import CCOProtectedRoute from './components/auth/CCOProtectedRoute';
 import DashboardPage from './pages/Dashboard/DashboardPage';
 import FleetPage from './pages/Fleet/FleetPage';
 import DriversPage from './pages/Drivers/DriversPage';
@@ -11,6 +13,11 @@ import MaintenancePage from './pages/Maintenance/MaintenancePage';
 import FuelPage from './pages/Fuel/FuelPage';
 import AnalyticsPage from './pages/Analytics/AnalyticsPage';
 import SettingsPage from './pages/Settings/SettingsPage';
+import CCOLoginPage from './pages/CCO/CCOLoginPage';
+import CCODashboardPage from './pages/CCO/CCODashboardPage';
+import CCOTripDetailPage from './pages/CCO/CCOTripDetailPage';
+import CCOVerificationPage from './pages/CCO/CCOVerificationPage';
+import CCOHistoryPage from './pages/CCO/CCOHistoryPage';
 import ToastProvider from './components/common/ToastProvider';
 
 export default function App() {
@@ -22,7 +29,25 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
 
-        {/* Protected app routes */}
+        {/* ── CCO Mobile App ─────────────────────────────── */}
+        <Route path="/cco/login" element={<CCOLoginPage />} />
+        <Route
+          path="/cco"
+          element={
+            <CCOProtectedRoute>
+              <CCOLayout />
+            </CCOProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/cco/dashboard" replace />} />
+          <Route path="dashboard" element={<CCODashboardPage />} />
+          <Route path="trips" element={<CCODashboardPage />} />
+          <Route path="history" element={<CCOHistoryPage />} />
+          <Route path="trip/:tripId" element={<CCOTripDetailPage />} />
+          <Route path="verify/:tripId/:checkpointId" element={<CCOVerificationPage />} />
+        </Route>
+
+        {/* ── Main Platform ──────────────────────────────── */}
         <Route
           path="/app"
           element={

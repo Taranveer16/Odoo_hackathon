@@ -346,3 +346,213 @@
     stroke-dashoffset: -28;
   }
 }
+
+/* ─── Light Mode Overrides for Hardcoded Dark Colors ─── */
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+[data-theme="light"] body {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .bg-\[\#07070c\] {
+  background-color: var(--bg-surface) !important;
+}
+
+[data-theme="light"] .bg-\[\#08080d\] {
+  background-color: var(--bg-surface) !important;
+}
+
+[data-theme="light"] .bg-\[\#060609\] {
+  background-color: var(--bg-surface-2) !important;
+}
+
+[data-theme="light"] .bg-\[\#06060a\] {
+  background-color: var(--bg-surface) !important;
+}
+
+[data-theme="light"] .bg-\[\#09090e\] {
+  background-color: var(--bg-panel) !important;
+}
+
+[data-theme="light"] .bg-\[\#09090f\] {
+  background-color: var(--bg-panel) !important;
+}
+
+[data-theme="light"] .bg-\[\#0d0d12\] {
+  background-color: var(--bg-panel-2) !important;
+}
+
+[data-theme="light"] .bg-\[\#0d0d18\] {
+  background-color: var(--bg-panel-2) !important;
+}
+
+[data-theme="light"] .bg-\[\#0d0d12\]\/50 {
+  background-color: rgba(241, 245, 249, 0.6) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+[data-theme="light"] .bg-\[\#0d0d18\]\/95 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+[data-theme="light"] .bg-\[\#0a0a0f\] {
+  background-color: var(--bg-surface-2) !important;
+}
+
+[data-theme="light"] .bg-\[\#0a0a10\] {
+  background-color: var(--bg-surface-2) !important;
+}
+
+[data-theme="light"] .bg-\[\#14141c\] {
+  background-color: var(--bg-surface-2) !important;
+}
+
+[data-theme="light"] .bg-\[\#14141f\] {
+  background-color: var(--bg-panel) !important;
+}
+
+[data-theme="light"] .bg-\[\#0f0f16\]\/40 {
+  background-color: rgba(241, 245, 249, 0.8) !important;
+}
+
+[data-theme="light"] .bg-\[\#0f0f16\]\/80 {
+  background-color: var(--bg-surface-2) !important;
+}
+
+[data-theme="light"] .bg-\[\#12121c\] {
+  background-color: var(--bg-panel) !important;
+}
+
+[data-theme="light"] .bg-\[\#12121e\] {
+  background-color: var(--bg-panel) !important;
+}
+
+[data-theme="light"] .bg-\[\#080810\] {
+  background-color: var(--bg-surface) !important;
+}
+
+/* ─── Borders ────────────────────────────────────────────── */
+[data-theme="light"] .border-white\/5 {
+  border-color: var(--border) !important;
+}
+
+[data-theme="light"] .border-white\/10 {
+  border-color: var(--border) !important;
+}
+
+[data-theme="light"] .border-white\/8 {
+  border-color: var(--border) !important;
+}
+
+[data-theme="light"] .border-white\/6 {
+  border-color: var(--border) !important;
+}
+
+[data-theme="light"] .border-white\/4 {
+  border-color: var(--border) !important;
+}
+
+[data-theme="light"] .border-white\/12 {
+  border-color: var(--border-2) !important;
+}
+
+[data-theme="light"] .border-white\/15 {
+  border-color: var(--border-2) !important;
+}
+
+/* ─── Text Colors ────────────────────────────────────────── */
+[data-theme="light"] .text-slate-200 {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .text-slate-300 {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .text-slate-400 {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="light"] .text-slate-500 {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="light"] .text-slate-600 {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="light"] .text-slate-700 {
+  color: var(--text-muted) !important;
+}
+
+[data-theme="light"] .text-white {
+  color: var(--text-primary) !important;
+}
+
+/* ─── Backgrounds with opacity ───────────────────────────── */
+[data-theme="light"] .bg-white\/2 {
+  background-color: rgba(100, 116, 139, 0.06) !important;
+}
+
+[data-theme="light"] .bg-white\/3 {
+  background-color: rgba(100, 116, 139, 0.08) !important;
+}
+
+[data-theme="light"] .bg-white\/4 {
+  background-color: rgba(100, 116, 139, 0.10) !important;
+}
+
+[data-theme="light"] .bg-white\/5 {
+  background-color: rgba(100, 116, 139, 0.12) !important;
+}
+
+[data-theme="light"] .bg-white\/6 {
+  background-color: rgba(100, 116, 139, 0.14) !important;
+}
+
+[data-theme="light"] .bg-black\/10 {
+  background-color: rgba(100, 116, 139, 0.06) !important;
+}
+
+[data-theme="light"] .bg-black\/20 {
+  background-color: rgba(100, 116, 139, 0.08) !important;
+}
+
+[data-theme="light"] .bg-black\/60 {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+}
+
+[data-theme="light"] .bg-black\/65 {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+}
+
+/* ─── Form elements ──────────────────────────────────────── */
+[data-theme="light"] input, 
+[data-theme="light"] select, 
+[data-theme="light"] textarea {
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* ─── Gradient overrides ─────────────────────────────────── */
+[data-theme="light"] .from-\[\#0d0d18\] {
+  --tw-gradient-from: var(--bg-panel-2) !important;
+}
+
+[data-theme="light"] .via-\[\#0d0d18\]\/80 {
+  --tw-gradient-via: rgba(248, 250, 252, 0.8) !important;
+}
+
+/* ─── CCO Layout specific ────────────────────────────────── */
+[data-theme="light"] .bg-\[\#07070c\].text-slate-200 {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+}

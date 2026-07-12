@@ -1,13 +1,14 @@
 // ============================================================
 // TransitOps — Data Type Definitions
-// Extended with full checkpoint/route lifecycle support
+// Extended with CCO, Warehouse, CargoVerification support
 // ============================================================
 
 export type Role =
   | 'fleet_manager'
   | 'dispatcher'
   | 'safety_officer'
-  | 'financial_analyst';
+  | 'financial_analyst'
+  | 'cargo_control_officer';
 
 export interface User {
   id: string;
@@ -16,6 +17,18 @@ export interface User {
   role: Role;
   branch?: string;
   avatarUrl?: string;
+  phone?: string;
+  assignedWarehouseId?: string; // for cargo_control_officer role
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Warehouse ────────────────────────────────────────────────
+export interface Warehouse {
+  id: string;
+  name: string;
+  location: string;
+  address?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -77,11 +90,53 @@ export interface Driver {
   updatedAt: string;
 }
 
+// ─── Cargo Manifest ──────────────────────────────────────────
+export interface CargoItem {
+  id: string;
+  name: string;
+  quantity: number;
+  weight: number; // kg per unit
+  category: string;
+  barcode?: string;
+}
+
+// ─── Cargo Verification ───────────────────────────────────────
+export type VerificationItemStatus = 'received' | 'damaged' | 'missing' | 'rejected';
+
+export interface CargoVerificationItem {
+  cargoItemId: string;
+  name: string;
+  expectedQty: number;
+  receivedQty: number;
+  missingQty: number;
+  damagedQty: number;
+  removedQty: number;
+  status: VerificationItemStatus;
+  notes?: string;
+}
+
+export type VerificationStatus = 'pending' | 'in_progress' | 'approved' | 'rejected';
+
+export interface CargoVerification {
+  id: string;
+  tripId: string;
+  checkpointId: string;
+  warehouseId: string;
+  verifiedBy: string;   // User.id of CCO
+  verifiedByName: string;
+  items: CargoVerificationItem[];
+  status: VerificationStatus;
+  overallNotes?: string;
+  createdAt: string;
+  verifiedAt?: string;
+}
+
 // ─── Trip & Checkpoints ──────────────────────────────────────
 export type CheckpointStatus =
   | 'pending'
   | 'en_route'
   | 'arrived'
+  | 'awaiting_verification'
   | 'loading'
   | 'unloading'
   | 'waiting'
@@ -89,15 +144,27 @@ export type CheckpointStatus =
   | 'departed'
   | 'completed';
 
+export type CheckpointVerificationStatus =
+  | 'not_required'
+  | 'pending'
+  | 'in_progress'
+  | 'approved'
+  | 'rejected';
+
 export interface Checkpoint {
   id: string;
   label: string;          // e.g. "Checkpoint 1 (Nashik)"
   location: string;
+  warehouseId?: string;
+  assignedCcoId?: string;
+  assignedCcoName?: string;
   expectedArrival?: string;
   actualArrival?: string;
   expectedDeparture?: string;
   actualDeparture?: string;
   status: CheckpointStatus;
+  verificationStatus?: CheckpointVerificationStatus;
+  verificationId?: string;
   notes?: string;
   delayMinutes?: number;
 }
@@ -133,6 +200,7 @@ export interface Trip {
   source: string;
   destination: string;
   checkpoints: Checkpoint[];       // Multi-stop route
+  cargoManifest?: CargoItem[];     // Cargo items for verification
   cargoType?: string;
   cargoWeight: number;
   clientName?: string;
@@ -263,5 +331,7 @@ export interface PaginatedResponse<T> {
 
 export interface AuthResponse {
   token: string;
+  access_token?: string;
   user: User;
 }
+

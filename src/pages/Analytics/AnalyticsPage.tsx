@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, AreaChart, Area, LineChart, Line, PieChart, Pie, Cell
@@ -11,6 +11,7 @@ import { getVehicles } from '../../services/vehicleService';
 import { TableSkeleton, KPICardSkeleton } from '../../components/common/Skeleton';
 import { exportToCSV } from '../../lib/csvExport';
 import { motion, AnimatePresence } from 'framer-motion';
+import ExportPDFButton from '../../components/common/ExportPDFButton';
 import {
   Fuel, TrendingUp, DollarSign, Award, Download, MapPin, Truck,
   Users, Package, Clock, ShieldAlert, CheckCircle2, Navigation, Activity
@@ -18,6 +19,10 @@ import {
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<'overview' | 'routes' | 'drivers' | 'cargo'>('overview');
+
+  // Chart refs for PDF capture
+  const tripPieRef = useRef<HTMLDivElement>(null);
+  const vehicleCostRef = useRef<HTMLDivElement>(null);
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['analytics-summary-page'],
@@ -79,6 +84,47 @@ export default function AnalyticsPage() {
     exportToCSV(vehicleCosts, 'vehicle_costs_roi_export');
   };
 
+  // PDF export data
+  const pdfKpis = useMemo(() => {
+    const base: Record<string, string | number> = {
+      'Total Trips': totalTrips,
+      'Active Dispatches': activeTrips,
+      'Completed Trips': completedTrips,
+      'Delayed Trips': delayedTrips,
+      'Cancelled Trips': cancelledTrips,
+      'Total Distance': `${totalDistanceCovered.toLocaleString()} km`,
+      'Cargo Delivered': `${cargoDelivered.toLocaleString()} kg`,
+      'Cargo In Transit': `${cargoInTransit.toLocaleString()} kg`,
+      'Delivery SLA': `${deliverySla}%`,
+      'On-Time Checkpoint': `${onTimeCheckpointPercent}%`,
+    };
+    if (summary) {
+      base['Fleet Utilization'] = `${summary.fleetUtilization}%`;
+      base['Total Fuel Cost'] = `$${summary.totalFuelCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      base['Total Maintenance'] = `$${summary.totalMaintenanceCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      base['Total Operational'] = `$${summary.totalOperationalCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      base['Avg Fuel Efficiency'] = `${summary.avgFuelEfficiency} km/L`;
+    }
+    return base;
+  }, [summary, totalTrips, activeTrips, completedTrips, delayedTrips, cancelledTrips, totalDistanceCovered, cargoDelivered, cargoInTransit]);
+
+  const pdfTables = useMemo(() => {
+    if (!vehicleCosts.length) return {};
+    return {
+      'Vehicle ROI Performance': {
+        headers: ['Vehicle', 'Fuel Cost', 'Maintenance', 'Acquisition', 'Total Cost', 'ROI'],
+        rows: vehicleCosts.map((vc) => [
+          `${vc.registrationNumber} – ${vc.name}`,
+          `$${vc.fuelCost.toLocaleString()}`,
+          `$${vc.maintenanceCost.toLocaleString()}`,
+          `$${vc.acquisitionCost.toLocaleString()}`,
+          `$${vc.totalCost.toLocaleString()}`,
+          `${vc.roi}%`,
+        ]),
+      },
+    };
+  }, [vehicleCosts]);
+
   // Pie chart data for trip distribution
   const tripPieData = [
     { name: 'Completed', value: completedTrips, fill: '#10b981' },
@@ -101,7 +147,7 @@ export default function AnalyticsPage() {
           <h1 className="page-title">Trip-Centric Reports & Analytics</h1>
           <p className="page-subtitle">Analyze live dispatch routes, checkpoint schedules, driver safety, and operational SLA achievements</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <button
             onClick={handleExportSummary}
             disabled={summaryLoading || !summary}
@@ -109,6 +155,15 @@ export default function AnalyticsPage() {
           >
             <Download className="w-3.5 h-3.5" /> Export Summary CSV
           </button>
+          <ExportPDFButton
+            reportTitle="Financial Analyst — Fleet Analytics Report"
+            kpis={pdfKpis}
+            chartRefs={[
+              { title: 'Trip Lifecycle Status', ref: tripPieRef },
+              { title: 'Top Costliest Vehicles', ref: vehicleCostRef },
+            ]}
+            tables={pdfTables}
+          />
         </div>
       </div>
 
@@ -169,7 +224,7 @@ export default function AnalyticsPage() {
               {/* Trip distribution donut */}
               <div className="bg-white/3 border border-white/5 rounded-2xl p-5">
                 <h3 className="text-xs font-black text-slate-300 uppercase tracking-widest mb-4">Trip Lifecycle Status</h3>
-                <div className="h-64 flex items-center justify-between">
+                <div className="h-64 flex items-center justify-between" ref={tripPieRef}>
                   <div className="flex-1 h-full">
                     {tripPieData.length === 0 ? (
                       <div className="h-full flex items-center justify-center text-slate-600 text-xs">No active data</div>
@@ -211,7 +266,7 @@ export default function AnalyticsPage() {
               {/* Stacked costliest vehicles */}
               <div className="bg-white/3 border border-white/5 rounded-2xl p-5">
                 <h3 className="text-xs font-black text-slate-300 uppercase tracking-widest mb-4">Top Costliest Vehicles</h3>
-                <div className="h-64">
+                <div className="h-64" ref={vehicleCostRef}>
                   {costsLoading ? (
                     <div className="h-full flex items-center justify-center text-slate-600 text-xs">Loading chart...</div>
                   ) : (

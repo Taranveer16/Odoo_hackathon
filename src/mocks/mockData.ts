@@ -7,6 +7,8 @@ import type {
   FuelLog,
   Expense,
   User,
+  Warehouse,
+  CargoVerification,
 } from '../types';
 
 const now = new Date().toISOString();
@@ -366,12 +368,22 @@ export const MOCK_TRIPS: Trip[] = [
     eta: new Date(Date.now() + 5 * 3600000).toISOString(),
     dispatchedAt: new Date(Date.now() - 4 * 3600000).toISOString(),
     departedAt: new Date(Date.now() - 3.5 * 3600000).toISOString(),
+    cargoManifest: [
+      { id: 'ci-001-1', name: 'Laptop Computers', quantity: 50, weight: 2.5, category: 'Electronics', barcode: 'BC-LT-50201' },
+      { id: 'ci-001-2', name: 'Tablet Devices', quantity: 30, weight: 0.8, category: 'Electronics', barcode: 'BC-TB-30202' },
+      { id: 'ci-001-3', name: 'Power Adapters', quantity: 120, weight: 0.3, category: 'Accessories', barcode: 'BC-PA-12003' },
+    ],
     checkpoints: [
       {
         id: 'cp-001-1',
         label: 'Checkpoint 1 (Rockford)',
         location: 'Rockford, IL',
+        warehouseId: 'wh-001',
+        assignedCcoId: 'cco-001',
+        assignedCcoName: 'Jordan Mills',
         status: 'departed',
+        verificationStatus: 'approved',
+        verificationId: 'vrf-001',
         actualArrival: new Date(Date.now() - 2 * 3600000).toISOString(),
         actualDeparture: new Date(Date.now() - 1.5 * 3600000).toISOString(),
         notes: 'Security checkpoint cleared. No delays.',
@@ -380,14 +392,22 @@ export const MOCK_TRIPS: Trip[] = [
         id: 'cp-001-2',
         label: 'Checkpoint 2 (Madison)',
         location: 'Madison, WI',
-        status: 'en_route',
+        warehouseId: 'wh-002',
+        assignedCcoId: 'cco-002',
+        assignedCcoName: 'Priya Nair',
+        status: 'awaiting_verification',
+        verificationStatus: 'pending',
         expectedArrival: new Date(Date.now() + 1.5 * 3600000).toISOString(),
       },
       {
         id: 'cp-001-3',
         label: 'Checkpoint 3 (La Crosse)',
         location: 'La Crosse, WI',
+        warehouseId: 'wh-003',
+        assignedCcoId: 'cco-003',
+        assignedCcoName: 'Sam Torres',
         status: 'pending',
+        verificationStatus: 'not_required',
         expectedArrival: new Date(Date.now() + 3.5 * 3600000).toISOString(),
       },
     ],
@@ -869,5 +889,95 @@ export const MOCK_EXPENSES: Expense[] = [
     description: 'Monthly commercial insurance premium',
     createdAt: daysAgo(30),
     updatedAt: daysAgo(30),
+  },
+];
+
+// ─── Mock Warehouses ──────────────────────────────────────────
+export const MOCK_WAREHOUSES: Warehouse[] = [
+  { id: 'wh-001', name: 'Rockford Distribution Hub', location: 'Rockford, IL', address: '1200 Industrial Pkwy, Rockford, IL 61101', createdAt: now, updatedAt: now },
+  { id: 'wh-002', name: 'Madison Cargo Center', location: 'Madison, WI', address: '450 Commerce Dr, Madison, WI 53704', createdAt: now, updatedAt: now },
+  { id: 'wh-003', name: 'La Crosse Transit Hub', location: 'La Crosse, WI', address: '800 River Rd, La Crosse, WI 54601', createdAt: now, updatedAt: now },
+  { id: 'wh-004', name: 'Omaha Freight Terminal', location: 'Omaha, NE', address: '2100 Freight Blvd, Omaha, NE 68101', createdAt: now, updatedAt: now },
+  { id: 'wh-005', name: 'Denver Logistics Park', location: 'Denver, CO', address: '555 Mountain View Ave, Denver, CO 80202', createdAt: now, updatedAt: now },
+  { id: 'wh-006', name: 'Sioux Falls Yard', location: 'Sioux Falls, SD', address: '310 Prairie Way, Sioux Falls, SD 57101', createdAt: now, updatedAt: now },
+];
+
+// ─── Mock CCO Users ───────────────────────────────────────────
+export const MOCK_CCO_USERS: User[] = [
+  {
+    id: 'cco-001',
+    email: 'jordan.m@transitops.io',
+    name: 'Jordan Mills',
+    role: 'cargo_control_officer',
+    assignedWarehouseId: 'wh-001',
+    phone: '+1-555-1001',
+    branch: 'Rockford',
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'cco-002',
+    email: 'priya.n@transitops.io',
+    name: 'Priya Nair',
+    role: 'cargo_control_officer',
+    assignedWarehouseId: 'wh-002',
+    phone: '+1-555-1002',
+    branch: 'Madison',
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'cco-003',
+    email: 'sam.t@transitops.io',
+    name: 'Sam Torres',
+    role: 'cargo_control_officer',
+    assignedWarehouseId: 'wh-003',
+    phone: '+1-555-1003',
+    branch: 'La Crosse',
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'cco-004',
+    email: 'alex.w@transitops.io',
+    name: 'Alex Washington',
+    role: 'cargo_control_officer',
+    assignedWarehouseId: 'wh-004',
+    phone: '+1-555-1004',
+    branch: 'Omaha',
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'cco-005',
+    email: 'luna.c@transitops.io',
+    name: 'Luna Chen',
+    role: 'cargo_control_officer',
+    assignedWarehouseId: 'wh-005',
+    phone: '+1-555-1005',
+    branch: 'Denver',
+    createdAt: now,
+    updatedAt: now,
+  },
+];
+
+// ─── Mock Cargo Verifications ─────────────────────────────────
+export const MOCK_CARGO_VERIFICATIONS: CargoVerification[] = [
+  {
+    id: 'vrf-001',
+    tripId: 'TRP-001',
+    checkpointId: 'cp-001-1',
+    warehouseId: 'wh-001',
+    verifiedBy: 'cco-001',
+    verifiedByName: 'Jordan Mills',
+    items: [
+      { cargoItemId: 'ci-001-1', name: 'Laptop Computers', expectedQty: 50, receivedQty: 50, missingQty: 0, damagedQty: 0, removedQty: 0, status: 'received' },
+      { cargoItemId: 'ci-001-2', name: 'Tablet Devices', expectedQty: 30, receivedQty: 28, missingQty: 2, damagedQty: 0, removedQty: 0, status: 'missing', notes: '2 units missing from shipment' },
+      { cargoItemId: 'ci-001-3', name: 'Power Adapters', expectedQty: 120, receivedQty: 120, missingQty: 0, damagedQty: 0, removedQty: 0, status: 'received' },
+    ],
+    status: 'approved',
+    overallNotes: 'Minor discrepancy on tablets — noted and approved. Shipment cleared.',
+    createdAt: new Date(Date.now() - 1.8 * 3600000).toISOString(),
+    verifiedAt: new Date(Date.now() - 1.5 * 3600000).toISOString(),
   },
 ];

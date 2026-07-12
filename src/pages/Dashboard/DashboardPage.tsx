@@ -3,13 +3,14 @@ import { motion } from 'framer-motion';
 import {
   Car, Users, Wrench, Navigation, Clock, Activity, TrendingUp, AlertTriangle
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { getAnalyticsSummary } from '../../services/analyticsService';
 import { getTrips } from '../../services/tripService';
 import { getVehicles } from '../../services/vehicleService';
 import { getDrivers } from '../../services/driverService';
 import StatusBadge from '../../components/common/StatusBadge';
 import { KPICardSkeleton, TableSkeleton } from '../../components/common/Skeleton';
+import ExportPDFButton from '../../components/common/ExportPDFButton';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell
 } from 'recharts';
@@ -70,7 +71,7 @@ function KPICard({ icon: Icon, label, value, suffix = '', change, color = 'text-
 }
 
 // ─── Status Bar Chart ─────────────────────────────────────────
-function VehicleStatusBar({ summary }: { summary: AnalyticsSummary }) {
+function VehicleStatusBar({ summary, chartRef }: { summary: AnalyticsSummary; chartRef: React.RefObject<HTMLDivElement | null> }) {
   const data = [
     { name: 'Available', value: summary.availableVehicles, fill: '#22C55E' },
     { name: 'On Trip', value: summary.activeVehicles - summary.availableVehicles, fill: '#3B82F6' },
@@ -81,26 +82,31 @@ function VehicleStatusBar({ summary }: { summary: AnalyticsSummary }) {
   return (
     <div className="card p-5">
       <h3 className="text-sm font-bold text-primary mb-4">Vehicle Status Distribution</h3>
-      <ResponsiveContainer width="100%" height={180}>
-        <BarChart data={data} layout="vertical" margin={{ left: 10, right: 20 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#2A2B2E" horizontal={false} />
-          <XAxis type="number" tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
-          <YAxis type="category" dataKey="name" tick={{ fill: '#9CA3AF', fontSize: 11 }} axisLine={false} tickLine={false} width={70} />
-          <Tooltip
-            contentStyle={{ background: '#1A1B1E', border: '1px solid #2A2B2E', borderRadius: 8, fontSize: 12 }}
-            labelStyle={{ color: '#F1F2F4' }}
-            itemStyle={{ color: '#9CA3AF' }}
-          />
-          <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-            {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+      <div ref={chartRef}>
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={data} layout="vertical" margin={{ left: 10, right: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#2A2B2E" horizontal={false} />
+            <XAxis type="number" tick={{ fill: '#6B7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis type="category" dataKey="name" tick={{ fill: '#9CA3AF', fontSize: 11 }} axisLine={false} tickLine={false} width={70} />
+            <Tooltip
+              contentStyle={{ background: '#1A1B1E', border: '1px solid #2A2B2E', borderRadius: 8, fontSize: 12 }}
+              labelStyle={{ color: '#F1F2F4' }}
+              itemStyle={{ color: '#9CA3AF' }}
+            />
+            <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+              {data.map((d, i) => <Cell key={i} fill={d.fill} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
 
 export default function DashboardPage() {
+  // Chart ref for PDF export
+  const chartRef = useRef<HTMLDivElement>(null);
+
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['analytics-summary'],
     queryFn: getAnalyticsSummary,
@@ -120,6 +126,42 @@ export default function DashboardPage() {
   const vehicleMap = Object.fromEntries((vehicles ?? []).map((v) => [v.id, v]));
   const driverMap = Object.fromEntries((drivers ?? []).map((d) => [d.id, d]));
 
+  // Build KPIs for PDF export
+  const pdfKpis = useMemo(() => {
+    if (!summary) return {};
+    return {
+      'Active Vehicles': summary.activeVehicles,
+      'Available Vehicles': summary.availableVehicles,
+      'In Maintenance': summary.vehiclesInMaintenance,
+      'Active Trips': summary.activeTrips,
+      'Pending Trips': summary.pendingTrips,
+      'Drivers On Duty': summary.driversOnDuty,
+      'Fleet Utilization': `${summary.fleetUtilization}%`,
+      'Completed Trips': summary.completedTrips,
+      'Fuel Cost': `$${summary.totalFuelCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+      'Maintenance Cost': `$${summary.totalMaintenanceCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+      'Total Operational': `$${summary.totalOperationalCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+      'Avg Fuel Efficiency': `${summary.avgFuelEfficiency} km/L`,
+    };
+  }, [summary]);
+
+  // Build recent trips table data for PDF
+  const pdfTables = useMemo(() => {
+    if (!recentTrips.length) return {};
+    return {
+      'Recent Trips': {
+        headers: ['Route', 'Vehicle', 'Driver', 'Cargo (kg)', 'Status'],
+        rows: recentTrips.map((trip) => [
+          `${trip.source} → ${trip.destination}`,
+          vehicleMap[trip.vehicleId]?.registrationNumber ?? trip.vehicleId,
+          driverMap[trip.driverId]?.name ?? trip.driverId,
+          trip.cargoWeight.toLocaleString(),
+          trip.status,
+        ]),
+      },
+    };
+  }, [recentTrips, vehicleMap, driverMap]);
+
   return (
     <div>
       {/* Page Header */}
@@ -128,9 +170,17 @@ export default function DashboardPage() {
           <h1 className="page-title">Dashboard</h1>
           <p className="page-subtitle">Fleet overview and real-time operations summary</p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted">
-          <Activity className="w-3.5 h-3.5 text-success" />
-          Live Data
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <Activity className="w-3.5 h-3.5 text-success" />
+            Live Data
+          </div>
+          <ExportPDFButton
+            reportTitle="Fleet Manager Dashboard Report"
+            kpis={pdfKpis}
+            chartRefs={[{ title: 'Vehicle Status Distribution', ref: chartRef }]}
+            tables={pdfTables}
+          />
         </div>
       </div>
 
@@ -154,7 +204,7 @@ export default function DashboardPage() {
 
       {/* ── Charts Row ─────────────────────────────────────── */}
       <div className="grid lg:grid-cols-2 gap-4 mb-6">
-        {summary && <VehicleStatusBar summary={summary} />}
+        {summary && <VehicleStatusBar summary={summary} chartRef={chartRef} />}
 
         {/* Op Cost Card */}
         {summary && (

@@ -5,6 +5,9 @@ import {
   MOCK_MAINTENANCE,
   MOCK_FUEL_LOGS,
   MOCK_EXPENSES,
+  MOCK_WAREHOUSES,
+  MOCK_CCO_USERS,
+  MOCK_CARGO_VERIFICATIONS,
 } from './mockData';
 import type {
   Vehicle,
@@ -13,6 +16,9 @@ import type {
   MaintenanceRecord,
   FuelLog,
   Expense,
+  User,
+  Warehouse,
+  CargoVerification,
 } from '../types';
 
 // ─── USE_MOCK Flag ────────────────────────────────────────────
@@ -33,6 +39,9 @@ interface MockStore {
   maintenance: MaintenanceRecord[];
   fuelLogs: FuelLog[];
   expenses: Expense[];
+  warehouses: Warehouse[];
+  ccoUsers: User[];
+  cargoVerifications: CargoVerification[];
   initialized: boolean;
 }
 
@@ -41,7 +50,15 @@ function loadStore(): MockStore {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as MockStore;
-      if (parsed.initialized) return parsed;
+      if (parsed.initialized) {
+        // Ensure new collections exist for existing stores
+        return {
+          ...parsed,
+          warehouses: parsed.warehouses ?? MOCK_WAREHOUSES,
+          ccoUsers: parsed.ccoUsers ?? MOCK_CCO_USERS,
+          cargoVerifications: parsed.cargoVerifications ?? MOCK_CARGO_VERIFICATIONS,
+        };
+      }
     }
   } catch {
     // ignore parse errors
@@ -54,6 +71,9 @@ function loadStore(): MockStore {
     maintenance: MOCK_MAINTENANCE,
     fuelLogs: MOCK_FUEL_LOGS,
     expenses: MOCK_EXPENSES,
+    warehouses: MOCK_WAREHOUSES,
+    ccoUsers: MOCK_CCO_USERS,
+    cargoVerifications: MOCK_CARGO_VERIFICATIONS,
     initialized: true,
   };
   saveStore(initial);
@@ -147,6 +167,60 @@ export const mockStore = {
   getExpenses: () => [..._store.expenses],
   addExpense: (expense: Expense) => {
     _store = { ..._store, expenses: [..._store.expenses, expense] };
+    saveStore(_store);
+  },
+
+  // Warehouses
+  getWarehouses: () => [..._store.warehouses],
+  getWarehouse: (id: string) => _store.warehouses.find((w) => w.id === id),
+  addWarehouse: (warehouse: Warehouse) => {
+    _store = { ..._store, warehouses: [..._store.warehouses, warehouse] };
+    saveStore(_store);
+  },
+
+  // CCO Users
+  getCCOUsers: () => [..._store.ccoUsers],
+  getCCOUser: (id: string) => _store.ccoUsers.find((c) => c.id === id),
+  getCCOsByWarehouse: (warehouseId: string) =>
+    _store.ccoUsers.filter((c) => c.assignedWarehouseId === warehouseId),
+  addCCOUser: (user: User) => {
+    _store = { ..._store, ccoUsers: [..._store.ccoUsers, user] };
+    saveStore(_store);
+  },
+  updateCCOUser: (updated: User) => {
+    _store = {
+      ..._store,
+      ccoUsers: _store.ccoUsers.map((c) => (c.id === updated.id ? updated : c)),
+    };
+    saveStore(_store);
+  },
+
+  // Cargo Verifications
+  getVerifications: () => [..._store.cargoVerifications],
+  getVerification: (id: string) =>
+    _store.cargoVerifications.find((v) => v.id === id),
+  getVerificationByCheckpoint: (tripId: string, checkpointId: string) =>
+    _store.cargoVerifications.find(
+      (v) => v.tripId === tripId && v.checkpointId === checkpointId
+    ),
+  getVerificationsByTrip: (tripId: string) =>
+    _store.cargoVerifications.filter((v) => v.tripId === tripId),
+  getVerificationsByWarehouse: (warehouseId: string) =>
+    _store.cargoVerifications.filter((v) => v.warehouseId === warehouseId),
+  addVerification: (verification: CargoVerification) => {
+    _store = {
+      ..._store,
+      cargoVerifications: [..._store.cargoVerifications, verification],
+    };
+    saveStore(_store);
+  },
+  updateVerification: (updated: CargoVerification) => {
+    _store = {
+      ..._store,
+      cargoVerifications: _store.cargoVerifications.map((v) =>
+        v.id === updated.id ? updated : v
+      ),
+    };
     saveStore(_store);
   },
 

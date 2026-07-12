@@ -7,13 +7,14 @@ import {
   Truck, User, Package, Clock, CheckCircle2, AlertTriangle,
   Zap, X, GripVertical, ArrowRight, Activity, Radio,
   Filter, Maximize2, Minimize2, ZoomIn, ZoomOut, Phone,
-  ChevronRight, Flag, Circle, Loader2
+  ChevronRight, Flag, Circle, Loader2, Eye
 } from 'lucide-react';
 import { getTrips, createTrip, dispatchTrip, completeTrip, cancelTrip, markCheckpoint } from '../../services/tripService';
 import { getVehicles } from '../../services/vehicleService';
 import { getDrivers } from '../../services/driverService';
 import { toast } from '../../store/toastStore';
-import type { Trip, Vehicle, Driver, TripLifecycleStatus, TripPriority } from '../../types';
+import { useAuthStore } from '../../store/authStore';
+import type { Trip, Vehicle, Driver, TripLifecycleStatus, TripPriority, CargoVerification, Checkpoint } from '../../types';
 
 // ─── Lifecycle helpers ─────────────────────────────────────
 const LIFECYCLE_STEPS: { key: TripLifecycleStatus; label: string }[] = [
@@ -328,13 +329,15 @@ interface CheckpointPanelProps {
   trip: Trip;
   onMarkCheckpoint: (tripId: string, cpId: string) => void;
   isLoading?: boolean;
+  verifications?: CargoVerification[];
+  canEdit?: boolean;
 }
 
-function CheckpointPanel({ trip, onMarkCheckpoint, isLoading }: CheckpointPanelProps) {
+function CheckpointPanel({ trip, onMarkCheckpoint, isLoading, verifications = [], canEdit = true }: CheckpointPanelProps) {
   const allStops = [
-    { id: 'origin', label: trip.source.split(',')[0], location: trip.source, status: 'completed' as const, type: 'origin' },
+    { id: 'origin', label: trip.source.split(',')[0], location: trip.source, status: 'completed' as const, type: 'origin', assignedCcoName: '', verificationStatus: 'not_required' },
     ...trip.checkpoints.map(cp => ({ ...cp, label: cp.label || cp.location, type: 'checkpoint' as const })),
-    { id: 'dest', label: trip.destination.split(',')[0], location: trip.destination, status: trip.status === 'delivered' ? 'completed' as const : 'pending' as const, type: 'destination' as const },
+    { id: 'dest', label: trip.destination.split(',')[0], location: trip.destination, status: trip.status === 'delivered' ? 'completed' as const : 'pending' as const, type: 'destination' as const, assignedCcoName: '', verificationStatus: 'not_required' },
   ];
 
   const canMark = (status: string) =>
@@ -345,9 +348,10 @@ function CheckpointPanel({ trip, onMarkCheckpoint, isLoading }: CheckpointPanelP
     return 'Mark Arrived';
   };
 
-  const dotColor = (status: string) => {
-    if (status === 'completed' || status === 'departed') return 'bg-emerald-500 border-emerald-500';
-    if (status === 'arrived' || status === 'loading' || status === 'unloading' || status === 'waiting') return 'bg-amber-500/30 border-amber-500 shadow-amber-500/30 shadow-lg';
+  const dotColor = (status: string, vStatus?: string) => {
+    if (vStatus === 'rejected') return 'bg-red-500 border-red-500';
+    if (status === 'completed' || status === 'departed' || vStatus === 'approved') return 'bg-emerald-500 border-emerald-500';
+    if (status === 'arrived' || status === 'loading' || status === 'unloading' || status === 'waiting' || status === 'awaiting_verification') return 'bg-amber-500/30 border-amber-500 shadow-amber-500/30 shadow-lg';
     if (status === 'en_route') return 'bg-blue-500/30 border-blue-500';
     return 'bg-white/5 border-white/15';
   };
@@ -358,69 +362,123 @@ function CheckpointPanel({ trip, onMarkCheckpoint, isLoading }: CheckpointPanelP
       <div className="absolute left-4 top-4 bottom-4 w-px bg-gradient-to-b from-emerald-500/30 via-accent/20 to-white/5" />
 
       {allStops.map((stop, i) => {
-        const isDone = stop.status === 'completed' || stop.status === 'departed';
-        const isCurrent = ['arrived', 'loading', 'unloading', 'waiting', 'en_route'].includes(stop.status);
         const isOriginalCp = stop.type === 'checkpoint';
+        const checkpointVerification = isOriginalCp ? verifications.find(v => v.checkpointId === stop.id) : null;
+        const vStatus = checkpointVerification ? checkpointVerification.status : (stop.verificationStatus || 'pending');
+
+        const isDone = stop.status === 'completed' || stop.status === 'departed' || vStatus === 'approved';
+        const isCurrent = ['arrived', 'loading', 'unloading', 'waiting', 'en_route', 'awaiting_verification'].includes(stop.status) && vStatus !== 'approved';
 
         return (
-          <div key={stop.id} className={`flex items-start gap-3 py-2 px-2 rounded-xl transition-colors ${isCurrent ? 'bg-amber-500/5 border border-amber-500/15' : 'hover:bg-white/2'}`}>
-            {/* dot */}
-            <div className={`relative z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${dotColor(stop.status)}`}>
-              {isDone
-                ? <CheckCircle2 className="w-2.5 h-2.5 text-white" />
-                : isCurrent
-                ? <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                : <div className="w-1.5 h-1.5 rounded-full bg-white/20" />}
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    {stop.type === 'origin' && <Flag className="w-3 h-3 text-amber-400" />}
-                    {stop.type === 'destination' && <Flag className="w-3 h-3 text-purple-400" />}
-                    {stop.type === 'checkpoint' && <Circle className="w-2.5 h-2.5 text-slate-500" />}
-                    <p className={`text-xs font-bold ${isDone ? 'text-slate-300' : isCurrent ? 'text-amber-300' : 'text-slate-500'}`}>
-                      {stop.label}
-                    </p>
-                  </div>
-                  <p className="text-[9px] text-slate-600 mt-0.5 pl-4">{stop.location}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                    isDone ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' :
-                    isCurrent ? 'text-amber-400 bg-amber-400/10 border-amber-400/30' :
-                    'text-slate-600 bg-white/3 border-white/8'
-                  }`}>{humanStatus(stop.status)}</span>
-                  {isOriginalCp && canMark(stop.status) && (
-                    <button
-                      onClick={() => onMarkCheckpoint(trip.id, stop.id)}
-                      disabled={isLoading}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-accent/15 hover:bg-accent/25 border border-accent/30 text-accent text-[9px] font-black rounded-lg transition-all active:scale-95 disabled:opacity-50"
-                    >
-                      {isLoading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <CheckCircle2 className="w-2.5 h-2.5" />}
-                      {getMarkLabel(stop.status)}
-                    </button>
-                  )}
-                </div>
+          <div key={stop.id} className={`flex flex-col gap-1 py-2.5 px-2.5 rounded-xl transition-colors ${isCurrent ? 'bg-amber-500/5 border border-amber-500/15' : 'hover:bg-white/2'}`}>
+            <div className="flex items-start gap-3">
+              {/* dot */}
+              <div className={`relative z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${dotColor(stop.status, vStatus)}`}>
+                {isDone ? (
+                  <CheckCircle2 className="w-2.5 h-2.5 text-white" />
+                ) : isCurrent ? (
+                  <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                ) : (
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                )}
               </div>
-              {'actualArrival' in stop && stop.actualArrival && (
-                <p className="text-[9px] text-slate-600 mt-1 pl-4">
-                  Arrived: <span className="text-slate-400">{new Date(stop.actualArrival).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                  {'actualDeparture' in stop && stop.actualDeparture && (
-                    <> · Departed: <span className="text-slate-400">{new Date(stop.actualDeparture as string).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></>
-                  )}
-                </p>
-              )}
-              {'notes' in stop && stop.notes && (
-                <p className="text-[9px] text-slate-500 mt-0.5 pl-4 italic">"{stop.notes}"</p>
-              )}
-              {'delayMinutes' in stop && typeof stop.delayMinutes === 'number' && stop.delayMinutes > 0 && (
-                <div className="flex items-center gap-1 mt-1 pl-4">
-                  <AlertTriangle className="w-2.5 h-2.5 text-red-400" />
-                  <span className="text-[9px] text-red-400 font-bold">+{stop.delayMinutes} min delay</span>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      {stop.type === 'origin' && <Flag className="w-3 h-3 text-amber-400" />}
+                      {stop.type === 'destination' && <Flag className="w-3 h-3 text-purple-400" />}
+                      {stop.type === 'checkpoint' && <Circle className="w-2.5 h-2.5 text-slate-500" />}
+                      <p className={`text-xs font-bold ${isDone ? 'text-slate-300' : isCurrent ? 'text-amber-300' : 'text-slate-500'}`}>
+                        {stop.label}
+                      </p>
+                    </div>
+                    <p className="text-[9px] text-slate-600 mt-0.5 pl-4">{stop.location}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                      vStatus === 'approved' ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' :
+                      vStatus === 'rejected' ? 'text-red-400 bg-red-400/10 border-red-400/20' :
+                      vStatus === 'in_progress' ? 'text-blue-400 bg-blue-400/10 border-blue-400/20' :
+                      isCurrent ? 'text-amber-400 bg-amber-400/10 border-amber-400/30' :
+                      'text-slate-600 bg-white/3 border-white/8'
+                    }`}>
+                      {vStatus === 'approved' ? 'Approved ✓' :
+                       vStatus === 'rejected' ? 'Rejected ✗' :
+                       vStatus === 'in_progress' ? 'Verifying...' :
+                       stop.status === 'awaiting_verification' ? 'Awaiting Verification' :
+                       humanStatus(stop.status)}
+                    </span>
+                    {isOriginalCp && canMark(stop.status) && vStatus !== 'approved' && vStatus !== 'rejected' && vStatus !== 'in_progress' && canEdit && (
+                      <button
+                        onClick={() => onMarkCheckpoint(trip.id, stop.id)}
+                        disabled={isLoading}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-accent/15 hover:bg-accent/25 border border-accent/30 text-accent text-[9px] font-black rounded-lg transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        {isLoading ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <CheckCircle2 className="w-2.5 h-2.5" />}
+                        {getMarkLabel(stop.status)}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              )}
+
+                {isOriginalCp && stop.assignedCcoName && (
+                  <p className="text-[9px] text-slate-500 mt-1 pl-4">
+                    Assigned Officer: <span className="text-white font-medium">{stop.assignedCcoName}</span>
+                  </p>
+                )}
+
+                {/* Show verification result summary */}
+                {checkpointVerification && (
+                  <div className="mt-2 ml-4 p-2 bg-black/20 border border-white/5 rounded-lg space-y-1 text-[10px]">
+                    <div className="flex justify-between text-slate-500">
+                      <span>Verified by: <span className="text-slate-300 font-bold">{checkpointVerification.verifiedByName}</span></span>
+                      {checkpointVerification.verifiedAt && (
+                        <span>{new Date(checkpointVerification.verifiedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      )}
+                    </div>
+                    {checkpointVerification.overallNotes && (
+                      <p className="text-slate-400 italic">"{checkpointVerification.overallNotes}"</p>
+                    )}
+                    {/* Discrepancies list */}
+                    {checkpointVerification.items.some(item => item.missingQty > 0 || item.damagedQty > 0 || item.removedQty > 0) ? (
+                      <div className="pt-1.5 border-t border-white/5 text-[9px] text-red-400 font-semibold space-y-0.5">
+                        {checkpointVerification.items.filter(item => item.missingQty > 0 || item.damagedQty > 0 || item.removedQty > 0).map(item => (
+                          <div key={item.cargoItemId} className="flex justify-between">
+                            <span>⚠ {item.name}:</span>
+                            <span>
+                              {item.missingQty > 0 && `${item.missingQty} Missing`}
+                              {item.damagedQty > 0 && ` ${item.damagedQty} Damaged`}
+                              {item.removedQty > 0 && ` ${item.removedQty} Removed`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[9px] text-emerald-400 font-semibold pt-1">✓ All cargo items matched expected manifest.</p>
+                    )}
+                  </div>
+                )}
+
+                {'actualArrival' in stop && stop.actualArrival && (
+                  <p className="text-[9px] text-slate-600 mt-1 pl-4">
+                    Arrived: <span className="text-slate-400">{new Date(stop.actualArrival).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    {'actualDeparture' in stop && stop.actualDeparture && (
+                      <> · Departed: <span className="text-slate-400">{new Date(stop.actualDeparture as string).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></>
+                    )}
+                  </p>
+                )}
+                {'notes' in stop && stop.notes && !checkpointVerification && (
+                  <p className="text-[9px] text-slate-500 mt-0.5 pl-4 italic">"{stop.notes}"</p>
+                )}
+                {'delayMinutes' in stop && typeof stop.delayMinutes === 'number' && stop.delayMinutes > 0 && (
+                  <div className="flex items-center gap-1 mt-1 pl-4">
+                    <AlertTriangle className="w-2.5 h-2.5 text-red-400" />
+                    <span className="text-[9px] text-red-400 font-bold">+{stop.delayMinutes} min delay</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         );
@@ -498,9 +556,12 @@ interface DetailPanelProps {
   onCancel: () => void;
   onMarkCheckpoint: (tripId: string, cpId: string) => void;
   isMarkingCheckpoint?: boolean;
+  verifications?: CargoVerification[];
+  /** If false, hides all mutation buttons (read-only mode for safety_officer) */
+  canEdit?: boolean;
 }
 
-function TripDetailPanel({ trip, vehicle, driver, onDispatch, onComplete, onCancel, onMarkCheckpoint, isMarkingCheckpoint }: DetailPanelProps) {
+function TripDetailPanel({ trip, vehicle, driver, onDispatch, onComplete, onCancel, onMarkCheckpoint, isMarkingCheckpoint, verifications = [], canEdit = true }: DetailPanelProps) {
   const [tab, setTab] = useState<'checkpoints' | 'vehicle'>('checkpoints');
   const [isMapFS, setIsMapFS] = useState(false);
 
@@ -637,7 +698,7 @@ function TripDetailPanel({ trip, vehicle, driver, onDispatch, onComplete, onCanc
                   <p className="text-[10px] mt-1">Direct route from origin to destination</p>
                 </div>
               ) : (
-                <CheckpointPanel trip={trip} onMarkCheckpoint={onMarkCheckpoint} isLoading={isMarkingCheckpoint} />
+                <CheckpointPanel trip={trip} onMarkCheckpoint={onMarkCheckpoint} isLoading={isMarkingCheckpoint} verifications={verifications} canEdit={canEdit} />
               )}
             </motion.div>
           )}
@@ -689,32 +750,41 @@ function TripDetailPanel({ trip, vehicle, driver, onDispatch, onComplete, onCanc
 
       {/* Action Footer */}
       <div className="px-4 py-3 border-t border-white/5 flex gap-2 shrink-0 bg-black/10">
-        {/* Next checkpoint quick-action */}
-        {nextCheckpoint && trip.status !== 'draft' && (
-          <button
-            onClick={() => onMarkCheckpoint(trip.id, nextCheckpoint.id)}
-            disabled={isMarkingCheckpoint}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 rounded-xl border border-amber-500/25 transition-all active:scale-95 disabled:opacity-50"
-          >
-            {isMarkingCheckpoint ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-            {nextCheckpoint.status === 'arrived' || nextCheckpoint.status === 'loading' || nextCheckpoint.status === 'waiting'
-              ? 'Depart Checkpoint' : 'Mark Checkpoint Arrived'}
-          </button>
-        )}
-        {(trip.status === 'ready_for_dispatch' || trip.status === 'draft' || trip.status === 'assigned') && (
-          <button onClick={onDispatch} className="flex-1 btn-primary py-2.5 text-xs font-black flex items-center justify-center gap-2">
-            <Zap className="w-3.5 h-3.5 stroke-[3]" /> DISPATCH
-          </button>
-        )}
-        {trip.status !== 'delivered' && trip.status !== 'trip_closed' && trip.status !== 'cancelled' && trip.status !== 'draft' && trip.status !== 'ready_for_dispatch' && trip.status !== 'assigned' && (
-          <button onClick={onComplete} className="flex-1 py-2.5 text-xs font-black bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-400 rounded-xl border border-emerald-500/25 transition-all flex items-center justify-center gap-2">
-            <CheckCircle2 className="w-3.5 h-3.5" /> MARK DELIVERED
-          </button>
-        )}
-        {trip.status !== 'cancelled' && trip.status !== 'delivered' && trip.status !== 'trip_closed' && (
-          <button onClick={onCancel} className="px-3.5 py-2.5 text-xs font-black bg-red-500/8 hover:bg-red-500/18 text-red-400 rounded-xl border border-red-500/18 transition-all flex items-center gap-1.5">
-            <X className="w-3.5 h-3.5" />
-          </button>
+        {canEdit ? (
+          <>
+            {/* Next checkpoint quick-action */}
+            {nextCheckpoint && trip.status !== 'draft' && (
+              <button
+                onClick={() => onMarkCheckpoint(trip.id, nextCheckpoint.id)}
+                disabled={isMarkingCheckpoint}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-black bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 rounded-xl border border-amber-500/25 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isMarkingCheckpoint ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                {nextCheckpoint.status === 'arrived' || nextCheckpoint.status === 'loading' || nextCheckpoint.status === 'waiting'
+                  ? 'Depart Checkpoint' : 'Mark Checkpoint Arrived'}
+              </button>
+            )}
+            {(trip.status === 'ready_for_dispatch' || trip.status === 'draft' || trip.status === 'assigned') && (
+              <button onClick={onDispatch} className="flex-1 btn-primary py-2.5 text-xs font-black flex items-center justify-center gap-2">
+                <Zap className="w-3.5 h-3.5 stroke-[3]" /> DISPATCH
+              </button>
+            )}
+            {trip.status !== 'delivered' && trip.status !== 'trip_closed' && trip.status !== 'cancelled' && trip.status !== 'draft' && trip.status !== 'ready_for_dispatch' && trip.status !== 'assigned' && (
+              <button onClick={onComplete} className="flex-1 py-2.5 text-xs font-black bg-emerald-600/20 hover:bg-emerald-600/35 text-emerald-400 rounded-xl border border-emerald-500/25 transition-all flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5" /> MARK DELIVERED
+              </button>
+            )}
+            {trip.status !== 'cancelled' && trip.status !== 'delivered' && trip.status !== 'trip_closed' && (
+              <button onClick={onCancel} className="px-3.5 py-2.5 text-xs font-black bg-red-500/8 hover:bg-red-500/18 text-red-400 rounded-xl border border-red-500/18 transition-all flex items-center gap-1.5">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center gap-2 py-2 text-[10px] font-bold text-slate-600">
+            <Eye className="w-3.5 h-3.5" />
+            Read-only mode — Safety Officer View
+          </div>
         )}
       </div>
     </div>
@@ -727,46 +797,151 @@ interface NewCheckpoint {
   location: string;
 }
 
+interface NewCheckpoint {
+  id: string;
+  location: string;
+  warehouseId?: string;
+  assignedCcoId?: string;
+  assignedCcoName?: string;
+}
+
+interface NewCargoItem {
+  id: string;
+  name: string;
+  quantity: number;
+  weight: number;
+  category: string;
+  barcode?: string;
+}
+
 function CreateTripModal({ vehicles, drivers, onClose, onSave }: {
   vehicles: Vehicle[];
   drivers: Driver[];
   onClose: () => void;
   onSave: (data: Partial<Trip>) => void;
 }) {
+  const qc = useQueryClient();
   const [form, setForm] = useState({
     tripName: '', vehicleId: '', driverId: '', source: '', destination: '',
     cargoType: '', cargoWeight: '', clientName: '',
     plannedDistance: '', notes: '', priority: 'normal' as TripPriority,
   });
+
   const [checkpoints, setCheckpoints] = useState<NewCheckpoint[]>([]);
+  const [cargoItems, setCargoItems] = useState<NewCargoItem[]>([
+    { id: 'item-1', name: 'Standard Pallets', quantity: 10, weight: 150, category: 'General' }
+  ]);
+
+  // Inline Create CCO form state
+  const [showAddCco, setShowAddCco] = useState(false);
+  const [targetCpId, setTargetCpId] = useState<string | null>(null);
+  const [ccoForm, setCcoForm] = useState({
+    name: '', email: '', password: 'password123', phone: '', assignedWarehouseId: ''
+  });
+
+  // Query warehouses & CCOs
+  const { data: warehouses = [] } = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      const { getWarehouses } = await import('../../services/warehouseService');
+      return getWarehouses();
+    }
+  });
+
+  const { data: ccos = [], refetch: refetchCcos } = useQuery({
+    queryKey: ['ccos'],
+    queryFn: async () => {
+      const { getCCOs } = await import('../../services/ccoService');
+      return getCCOs();
+    }
+  });
 
   const addCheckpoint = () => setCheckpoints(c => [...c, { id: `cp-${Date.now()}`, location: '' }]);
   const removeCheckpoint = (id: string) => setCheckpoints(c => c.filter(x => x.id !== id));
   const updateCheckpoint = (id: string, val: string) =>
     setCheckpoints(c => c.map(x => x.id === id ? { ...x, location: val } : x));
 
+  const updateCheckpointCco = (id: string, warehouseId: string, assignedCcoId: string) => {
+    const selectedCco = ccos.find(c => c.id === assignedCcoId);
+    setCheckpoints(c => c.map(x => x.id === id ? {
+      ...x,
+      warehouseId,
+      assignedCcoId,
+      assignedCcoName: selectedCco ? selectedCco.name : ''
+    } : x));
+  };
+
+  // Cargo Items handlers
+  const addCargoItem = () => setCargoItems(items => [...items, {
+    id: `item-${Date.now()}`, name: '', quantity: 1, weight: 10, category: 'General'
+  }]);
+  const removeCargoItem = (id: string) => setCargoItems(items => items.filter(x => x.id !== id));
+  const updateCargoItem = (id: string, field: keyof NewCargoItem, val: any) =>
+    setCargoItems(items => items.map(x => x.id === id ? { ...x, [field]: val } : x));
+
+  // Inline CCO save
+  const handleCreateCco = async () => {
+    if (!ccoForm.name || !ccoForm.email || !ccoForm.assignedWarehouseId) {
+      toast.error('Missing fields', 'Name, Email, and Assigned Warehouse are required.');
+      return;
+    }
+    try {
+      const { createCCO } = await import('../../services/ccoService');
+      const newCco = await createCCO({
+        name: ccoForm.name,
+        email: ccoForm.email,
+        phone: ccoForm.phone,
+        assignedWarehouseId: ccoForm.assignedWarehouseId
+      });
+      toast.success('Officer created', `Cargo Control Officer ${newCco.name} created successfully.`);
+      await refetchCcos();
+      if (targetCpId) {
+        updateCheckpointCco(targetCpId, ccoForm.assignedWarehouseId, newCco.id);
+      }
+      setShowAddCco(false);
+      setCcoForm({ name: '', email: '', password: 'password123', phone: '', assignedWarehouseId: '' });
+    } catch (err: any) {
+      toast.error('Create CCO failed', err.message);
+    }
+  };
+
   const handleSubmit = () => {
     if (!form.vehicleId || !form.driverId || !form.source || !form.destination) {
       toast.error('Missing fields', 'Vehicle, driver, source and destination are required.');
       return;
     }
+
+    const calculatedWeight = cargoItems.reduce((acc, curr) => acc + (curr.quantity * curr.weight), 0);
+
     onSave({
       tripName: form.tripName || `${form.source.split(',')[0]} → ${form.destination.split(',')[0]}`,
       vehicleId: form.vehicleId,
       driverId: form.driverId,
       source: form.source,
       destination: form.destination,
-      cargoType: form.cargoType,
-      cargoWeight: parseFloat(form.cargoWeight) || 0,
+      cargoType: form.cargoType || (cargoItems[0]?.name ?? 'General Freight'),
+      cargoWeight: calculatedWeight || parseFloat(form.cargoWeight) || 0,
       clientName: form.clientName,
       plannedDistance: parseFloat(form.plannedDistance) || 0,
       notes: form.notes,
       priority: form.priority,
+      cargoManifest: cargoItems.filter(c => c.name).map(c => ({
+        id: c.id,
+        name: c.name,
+        quantity: c.quantity,
+        weight: c.weight,
+        category: c.category,
+        barcode: c.barcode || `BC-${c.name.slice(0,2).toUpperCase()}-${Math.floor(1000 + Math.random()*9000)}`
+      })),
       checkpoints: checkpoints.filter(c => c.location).map((c, i) => ({
         id: c.id,
         label: `Checkpoint ${i + 1} (${c.location.split(',')[0]})`,
         location: c.location,
+        warehouseId: c.warehouseId,
+        assignedCcoId: c.assignedCcoId,
+        assignedCcoName: c.assignedCcoName,
         status: 'pending' as const,
+        verificationStatus: 'pending' as const,
       })),
       status: 'draft',
       progressPercent: 0,
@@ -783,21 +958,21 @@ function CreateTripModal({ vehicles, drivers, onClose, onSave }: {
       <motion.div
         initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
         transition={{ type: 'spring', stiffness: 380, damping: 38 }}
-        className="relative z-10 w-full max-w-md bg-[#0d0d18] border-l border-white/8 flex flex-col shadow-2xl"
+        className="relative z-10 w-full max-w-lg bg-[#0d0d18] border-l border-white/8 flex flex-col shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 shrink-0">
           <div>
             <h2 className="text-base font-black text-white">Create Trip</h2>
-            <p className="text-[10px] text-slate-500 mt-0.5">Route, vehicle, driver & cargo</p>
+            <p className="text-[10px] text-slate-500 mt-0.5">Route, vehicle, driver & cargo configuration</p>
           </div>
           <button onClick={onClose} className="w-7 h-7 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 transition-colors">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Form */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        {/* Form Scroll Container */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           {/* Trip Info */}
           <div>
             <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2.5">Trip Info</p>
@@ -847,8 +1022,8 @@ function CreateTripModal({ vehicles, drivers, onClose, onSave }: {
 
           {/* Route Builder */}
           <div>
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2.5">Route</p>
-            <div className="space-y-2">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2.5">Route & Checkpoint Assignment</p>
+            <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-full bg-amber-500/20 border-2 border-amber-500/60 flex items-center justify-center shrink-0">
                   <MapPin className="w-3 h-3 text-amber-400" />
@@ -857,22 +1032,68 @@ function CreateTripModal({ vehicles, drivers, onClose, onSave }: {
                   value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))} />
               </div>
 
-              <Reorder.Group axis="y" values={checkpoints} onReorder={setCheckpoints} className="space-y-2">
-                {checkpoints.map((cp, i) => (
-                  <Reorder.Item key={cp.id} value={cp}>
-                    <div className="flex items-center gap-2">
-                      <GripVertical className="w-3.5 h-3.5 text-slate-600 cursor-grab shrink-0" />
-                      <div className="w-5 h-5 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0">
-                        <span className="text-[8px] font-black text-blue-400">{i + 1}</span>
+              <Reorder.Group axis="y" values={checkpoints} onReorder={setCheckpoints} className="space-y-3">
+                {checkpoints.map((cp, i) => {
+                  const warehouseCcos = ccos.filter(c => c.assignedWarehouseId === cp.warehouseId);
+                  return (
+                    <Reorder.Item key={cp.id} value={cp}>
+                      <div className="bg-white/2 border border-white/5 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <GripVertical className="w-3.5 h-3.5 text-slate-600 cursor-grab shrink-0" />
+                          <div className="w-5 h-5 rounded-full bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0">
+                            <span className="text-[8px] font-black text-blue-400">{i + 1}</span>
+                          </div>
+                          <input className="input flex-1 text-sm" placeholder={`Checkpoint ${i + 1} location`}
+                            value={cp.location} onChange={e => updateCheckpoint(cp.id, e.target.value)} />
+                          <button onClick={() => removeCheckpoint(cp.id)} className="text-slate-600 hover:text-red-400 transition-colors shrink-0">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pl-7">
+                          <div>
+                            <label className="text-[9px] text-slate-600 font-semibold mb-0.5 block">Warehouse</label>
+                            <select
+                              className="input w-full text-xs py-1"
+                              value={cp.warehouseId || ''}
+                              onChange={e => updateCheckpointCco(cp.id, e.target.value, '')}
+                            >
+                              <option value="">— Select Warehouse —</option>
+                              {warehouses.map(wh => <option key={wh.id} value={wh.id}>{wh.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-0.5">
+                              <label className="text-[9px] text-slate-600 font-semibold block">Officer</label>
+                              {cp.warehouseId && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTargetCpId(cp.id);
+                                    setCcoForm(f => ({ ...f, assignedWarehouseId: cp.warehouseId || '' }));
+                                    setShowAddCco(true);
+                                  }}
+                                  className="text-[9px] text-accent hover:underline font-bold"
+                                >
+                                  + Create New
+                                </button>
+                              )}
+                            </div>
+                            <select
+                              className="input w-full text-xs py-1"
+                              value={cp.assignedCcoId || ''}
+                              disabled={!cp.warehouseId}
+                              onChange={e => updateCheckpointCco(cp.id, cp.warehouseId || '', e.target.value)}
+                            >
+                              <option value="">— Select Officer —</option>
+                              {warehouseCcos.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                          </div>
+                        </div>
                       </div>
-                      <input className="input flex-1 text-sm" placeholder={`Checkpoint ${i + 1} location`}
-                        value={cp.location} onChange={e => updateCheckpoint(cp.id, e.target.value)} />
-                      <button onClick={() => removeCheckpoint(cp.id)} className="text-slate-600 hover:text-red-400 transition-colors shrink-0">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </Reorder.Item>
-                ))}
+                    </Reorder.Item>
+                  );
+                })}
               </Reorder.Group>
 
               <button onClick={addCheckpoint}
@@ -890,24 +1111,90 @@ function CreateTripModal({ vehicles, drivers, onClose, onSave }: {
             </div>
           </div>
 
-          {/* Cargo */}
+          {/* Cargo Manifest Builder */}
           <div>
-            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2.5">Cargo & Details</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Cargo Manifest</p>
+              <button
+                type="button"
+                onClick={addCargoItem}
+                className="text-[10px] text-accent hover:underline font-bold"
+              >
+                + Add Cargo Item
+              </button>
+            </div>
+            <div className="space-y-2">
+              {cargoItems.map((item, idx) => (
+                <div key={item.id} className="bg-white/2 border border-white/5 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="input flex-1 text-xs py-1"
+                      placeholder="Item name (e.g. Tablets)"
+                      value={item.name}
+                      onChange={e => updateCargoItem(item.id, 'name', e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeCargoItem(item.id)}
+                      className="text-slate-600 hover:text-red-400 p-1 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[8px] text-slate-600 font-semibold block mb-0.5">Quantity</label>
+                      <input
+                        type="number"
+                        className="input w-full text-xs py-1"
+                        placeholder="Qty"
+                        value={item.quantity}
+                        onChange={e => updateCargoItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[8px] text-slate-600 font-semibold block mb-0.5">Unit Weight (kg)</label>
+                      <input
+                        type="number"
+                        className="input w-full text-xs py-1"
+                        placeholder="Weight"
+                        value={item.weight}
+                        onChange={e => updateCargoItem(item.id, 'weight', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[8px] text-slate-600 font-semibold block mb-0.5">Category</label>
+                      <select
+                        className="input w-full text-xs py-1"
+                        value={item.category}
+                        onChange={e => updateCargoItem(item.id, 'category', e.target.value)}
+                      >
+                        <option value="General">General</option>
+                        <option value="Electronics">Electronics</option>
+                        <option value="Perishables">Perishables</option>
+                        <option value="Chemicals">Chemicals</option>
+                        <option value="Accessories">Accessories</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Details */}
+          <div>
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2.5">Extra Details</p>
             <div className="grid grid-cols-2 gap-2.5">
               <div>
-                <label className="text-[10px] text-slate-500 mb-1 block font-semibold">Cargo Type</label>
-                <input className="input w-full text-sm" placeholder="e.g. Electronics"
-                  value={form.cargoType} onChange={e => setForm(f => ({ ...f, cargoType: e.target.value }))} />
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-500 mb-1 block font-semibold">Weight (kg)</label>
-                <input type="number" className="input w-full text-sm" placeholder="0"
-                  value={form.cargoWeight} onChange={e => setForm(f => ({ ...f, cargoWeight: e.target.value }))} />
-              </div>
-              <div className="col-span-2">
                 <label className="text-[10px] text-slate-500 mb-1 block font-semibold">Planned Distance (km)</label>
                 <input type="number" className="input w-full text-sm" placeholder="0"
                   value={form.plannedDistance} onChange={e => setForm(f => ({ ...f, plannedDistance: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 mb-1 block font-semibold">Cargo Type Override</label>
+                <input className="input w-full text-sm" placeholder="e.g. High Value Tech"
+                  value={form.cargoType} onChange={e => setForm(f => ({ ...f, cargoType: e.target.value }))} />
               </div>
               <div className="col-span-2">
                 <label className="text-[10px] text-slate-500 mb-1 block font-semibold">Notes</label>
@@ -925,6 +1212,82 @@ function CreateTripModal({ vehicles, drivers, onClose, onSave }: {
             <Plus className="w-4 h-4" /> Create Trip
           </button>
         </div>
+
+        {/* Inline Create CCO Overlay Modal */}
+        <AnimatePresence>
+          {showAddCco && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-sm bg-[#12121c] border border-white/10 rounded-2xl p-4 shadow-2xl space-y-4"
+              >
+                <div>
+                  <h3 className="text-sm font-black text-white">Create Cargo Control Officer</h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Add an officer account for checkpoint assignments</p>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-semibold mb-0.5 block">Full Name</label>
+                    <input
+                      className="input w-full text-xs py-1.5"
+                      placeholder="Jordan Mills"
+                      value={ccoForm.name}
+                      onChange={e => setCcoForm(f => ({ ...f, name: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-semibold mb-0.5 block">Email / Username</label>
+                    <input
+                      type="email"
+                      className="input w-full text-xs py-1.5"
+                      placeholder="jordan.m@transitops.io"
+                      value={ccoForm.email}
+                      onChange={e => setCcoForm(f => ({ ...f, email: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-semibold mb-0.5 block">Password</label>
+                    <input
+                      type="password"
+                      className="input w-full text-xs py-1.5"
+                      placeholder="password123"
+                      value={ccoForm.password}
+                      disabled
+                    />
+                    <span className="text-[8px] text-slate-600 block mt-0.5">Password is pre-set to password123 for demo logins</span>
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-slate-400 font-semibold mb-0.5 block">Phone Number (Optional)</label>
+                    <input
+                      className="input w-full text-xs py-1.5"
+                      placeholder="+1-555-0099"
+                      value={ccoForm.phone}
+                      onChange={e => setCcoForm(f => ({ ...f, phone: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCco(false)}
+                    className="flex-1 btn-secondary text-xs py-2"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateCco}
+                    className="flex-1 btn-primary text-xs py-2"
+                  >
+                    Create Officer
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );
@@ -933,10 +1296,15 @@ function CreateTripModal({ vehicles, drivers, onClose, onSave }: {
 // ─── TripsPage Main ──────────────────────────────────────
 export default function TripsPage() {
   const qc = useQueryClient();
+  const { user } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Role-based permissions
+  const isSafetyOfficer = user?.role === 'safety_officer';
+  const canEdit = !isSafetyOfficer;
 
   const { data: trips = [], isLoading } = useQuery({ queryKey: ['trips'], queryFn: getTrips });
   const { data: vehicles = [] } = useQuery({ queryKey: ['vehicles'], queryFn: getVehicles });
@@ -993,6 +1361,17 @@ export default function TripsPage() {
 
   const selectedTrip = trips.find(t => t.id === queryId) ?? filtered[0] ?? trips[0];
 
+  const { data: verifications = [] } = useQuery({
+    queryKey: ['verifications', selectedTrip?.id],
+    queryFn: async () => {
+      if (!selectedTrip?.id) return [];
+      const { getVerificationsByTrip } = await import('../../services/verificationService');
+      return getVerificationsByTrip(selectedTrip.id);
+    },
+    enabled: !!selectedTrip?.id,
+    refetchInterval: 4000,
+  });
+
   // Set default selection
   useEffect(() => {
     if (selectedTrip && !queryId) {
@@ -1033,12 +1412,20 @@ export default function TripsPage() {
               <span className="text-[8px] text-slate-600 font-bold uppercase">{k.label}</span>
             </div>
           ))}
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-accent hover:bg-accent/90 text-black font-black text-xs rounded-xl transition-all shadow-lg shadow-accent/20 active:scale-95 ml-1"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[3]" /> Create Trip
-          </button>
+          {/* Safety Officer sees read-only badge instead of Create button */}
+          {isSafetyOfficer ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl ml-1">
+              <Eye className="w-3 h-3 text-emerald-400" />
+              <span className="text-[9px] font-black text-emerald-400">Read Only</span>
+            </div>
+          ) : (
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-accent hover:bg-accent/90 text-black font-black text-xs rounded-xl transition-all shadow-lg shadow-accent/20 active:scale-95 ml-1"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[3]" /> Create Trip
+            </button>
+          )}
         </div>
       </div>
 
@@ -1112,6 +1499,8 @@ export default function TripsPage() {
               onCancel={() => cancelMutation.mutate(selectedTrip.id)}
               onMarkCheckpoint={(tripId, cpId) => checkpointMutation.mutate({ tripId, cpId })}
               isMarkingCheckpoint={checkpointMutation.isPending}
+              verifications={verifications}
+              canEdit={canEdit}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-700">
@@ -1122,9 +1511,9 @@ export default function TripsPage() {
         </div>
       </div>
 
-      {/* Create Trip Drawer */}
+      {/* Create Trip Drawer — only shown to non-safety-officer roles */}
       <AnimatePresence>
-        {createOpen && (
+        {createOpen && canEdit && (
           <CreateTripModal
             vehicles={vehicles}
             drivers={drivers}
